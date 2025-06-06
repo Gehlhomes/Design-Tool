@@ -811,15 +811,81 @@
       "Other"
     ];
     
-    // Check if a client view is provided via URL query parameter
+    // Helper to read URL query parameters
     function getQueryParam(param) {
       const params = new URLSearchParams(window.location.search);
       return params.get(param);
     }
-    
+
+    // Encode/decode experience data using a simple LZW-based compression
+    function lzwCompress(uncompressed) {
+      const dict = new Map();
+      const data = Array.from(uncompressed);
+      let out = [];
+      let phrase = data[0];
+      let code = 256;
+      for (let i = 1; i < data.length; i++) {
+        const currChar = data[i];
+        const combo = phrase + currChar;
+        if (dict.has(combo)) {
+          phrase = combo;
+        } else {
+          out.push(phrase.length > 1 ? dict.get(phrase) : phrase.charCodeAt(0));
+          dict.set(combo, code);
+          code++;
+          phrase = currChar;
+        }
+      }
+      out.push(phrase.length > 1 ? dict.get(phrase) : phrase.charCodeAt(0));
+      return out.map(c => String.fromCharCode(c)).join("");
+    }
+
+    function lzwDecompress(compressed) {
+      const dict = new Map();
+      const data = Array.from(compressed);
+      let currChar = data[0];
+      let oldPhrase = currChar;
+      let out = [currChar];
+      let code = 256;
+      for (let i = 1; i < data.length; i++) {
+        const currCode = data[i].charCodeAt(0);
+        let phrase;
+        if (currCode < 256) {
+          phrase = data[i];
+        } else {
+          phrase = dict.get(currCode) || (oldPhrase + currChar);
+        }
+        out.push(phrase);
+        currChar = phrase.charAt(0);
+        dict.set(code, oldPhrase + currChar);
+        code++;
+        oldPhrase = phrase;
+      }
+      return out.join("");
+    }
+
+    function encodeData(data) {
+      const compressed = lzwCompress(JSON.stringify(data));
+      return btoa(unescape(encodeURIComponent(compressed)));
+    }
+
+    function decodeData(str) {
+      const compressed = decodeURIComponent(escape(atob(str)));
+      const json = lzwDecompress(compressed);
+      return JSON.parse(json);
+    }
+
     let isClientView = false;
+    const encodedDataParam = getQueryParam("data");
     const experienceIdParam = getQueryParam("experienceId");
-    if (experienceIdParam) {
+    if (encodedDataParam) {
+      try {
+        sections = decodeData(encodedDataParam);
+        isClientView = true;
+      } catch (e) {
+        console.error("Error decoding experience data.", e);
+      }
+    } else if (experienceIdParam) {
       try {
         const storedExperiences = JSON.parse(localStorage.getItem("tempExperiences") || "{}");
         if (storedExperiences[experienceIdParam]) {
@@ -1380,38 +1446,48 @@
     /***********************
      * Generate Client Link *
      ***********************/
-    function saveView() {
-      const spinner = document.getElementById("link-spinner");
-      const linkButtons = document.getElementById("link-buttons");
-      spinner.style.display = "block";
-      linkButtons.style.display = "none";
-      setTimeout(() => {
-        // Generate unique experience ID
-        const experienceId = Date.now().toString();
-        // Store experience in localStorage
-        let storedExperiences = JSON.parse(localStorage.getItem("tempExperiences") || "{}");
-        storedExperiences[experienceId] = { sections: JSON.parse(JSON.stringify(sections)) };
-        localStorage.setItem("tempExperiences", JSON.stringify(storedExperiences));
-        // Generate short link
-        generatedLink = window.location.origin + window.location.pathname + '?experienceId=' + experienceId;
-        spinner.style.display = "none";
-        linkButtons.style.display = "block";
-      }, 1000); // Simulate 1-second processing
-    }
+      function saveView() {
+        const spinner = document.getElementById("link-spinner");
+        const linkButtons = document.getElementById("link-buttons");
+        spinner.style.display = "block";
+        linkButtons.style.display = "none";
+        try {
+          // Generate unique ID and store experience locally
+          const experienceId = Date.now().toString();
+          let storedExperiences = JSON.parse(localStorage.getItem("tempExperiences") || "{}");
+          storedExperiences[experienceId] = { sections: JSON.parse(JSON.stringify(sections)) };
+          localStorage.setItem("tempExperiences", JSON.stringify(storedExperiences));
 
-    function showLinkPopup(action) {
-      if (!generatedLink) {
-        alert("Please generate a client link first.");
-        return;
+          // Include the experience name for readability
+          const nameSlug = (currentExperienceName || 'Untitled').trim().replace(/\s+/g, '-').toLowerCase();
+          const encoded = encodeData(sections);
+          generatedLink = `${window.location.origin}${window.location.pathname}?experience=${encodeURIComponent(nameSlug)}&data=${encoded}`;
+
+          autoSaveCurrentExperience();
+        } catch (e) {
+          console.error("Error generating client link", e);
+          alert("Failed to generate link.");
+        } finally {
+          spinner.style.display = "none";
+          linkButtons.style.display = "block";
+        }
       }
-      closeAllPopups();
-      const linkText = document.getElementById("link-text");
-      linkText.textContent = generatedLink;
-      document.getElementById("link-preview-popup").style.display = "flex";
-      if (action === 'copy') {
-        copyLink();
+
+      function showLinkPopup(action) {
+        if (!generatedLink) {
+          alert("Please generate a client link first.");
+          return;
+        }
+        closeAllPopups();
+        const linkText = document.getElementById("link-text");
+        linkText.textContent = generatedLink;
+        document.getElementById("link-preview-popup").style.display = "flex";
+        if (action === 'copy') {
+          copyLink();
+        } else if (action === 'preview') {
+          window.open(generatedLink, '_blank');
+        }
       }
-    }
 
     function copyLink() {
       const linkText = document.getElementById("link-text");
@@ -1616,6 +1692,30 @@
       }
     }
 
+    function autoSaveCurrentExperience() {
+      let name = currentExperienceName;
+      if (!name) {
+        name = "Untitled Experience";
+      }
+      if (editingExperienceId === null) {
+        const maxId = savedExperiences.reduce((m, e) => Math.max(m, e.id), -1);
+        editingExperienceId = maxId + 1;
+      }
+      const data = {
+        id: editingExperienceId,
+        name: name,
+        sections: JSON.parse(JSON.stringify(sections))
+      };
+      const index = savedExperiences.findIndex(exp => exp.id === editingExperienceId);
+      if (index !== -1) {
+        savedExperiences[index] = data;
+      } else {
+        savedExperiences.push(data);
+      }
+      currentExperienceName = name;
+      localStorage.setItem("savedExperiences", JSON.stringify(savedExperiences));
+    }
+
     function hidePopup(popupId) {
       const popup = document.getElementById(popupId);
       if (popup) {
@@ -1740,9 +1840,15 @@
       document.getElementById("client-page").style.display = "block";
       renderClient();
     } else {
-      renderBusiness();
-      showPage('business'); // Start on Experience Builder
+      if (adminLoggedIn) {
+        showPage('admin');
+      } else {
+        renderBusiness();
+        showPage('business');
+      }
     }
+
+    window.addEventListener('beforeunload', autoSaveCurrentExperience);
   </script>
 </body>
 </html>
