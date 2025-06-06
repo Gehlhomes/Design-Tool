@@ -866,11 +866,19 @@
 
     function encodeData(data) {
       const compressed = lzwCompress(JSON.stringify(data));
-      return btoa(unescape(encodeURIComponent(compressed)));
+      const bytes = new TextEncoder().encode(compressed);
+      let binary = "";
+      bytes.forEach(b => binary += String.fromCharCode(b));
+      return btoa(binary);
     }
 
     function decodeData(str) {
-      const compressed = decodeURIComponent(escape(atob(str)));
+      const binary = atob(str);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      const compressed = new TextDecoder().decode(bytes);
       const json = lzwDecompress(compressed);
       return JSON.parse(json);
     }
