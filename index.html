@@ -756,8 +756,7 @@
 
   <!-- Client Preview / Client Experience Page -->
   <div id="client-page" class="page">
-    <h1 id="client-header">Client Experience</h1>
-    <h2 id="client-experience-title" class="experience-title" style="display: none;"></h2>
+    <h1 id="client-experience-title" class="experience-title" style="display: none;"></h1>
     <p class="welcome-text">This is an interactive Experience, select the items/images you like and at the end download your brochure that creates you a PDF with the items/images you selected.</p>
     <div id="client-content">
       <!-- Client content is rendered here -->
@@ -817,37 +816,23 @@
       return params.get(param);
     }
 
-    // Encode/decode experience data so links can be shared
-    function encodeData(data) {
-      return btoa(encodeURIComponent(JSON.stringify(data)));
-    }
-    function decodeData(str) {
-      return JSON.parse(decodeURIComponent(atob(str)));
-    }
-
     let isClientView = false;
-    const encodedDataParam = getQueryParam("data");
+    let currentExperienceName = null;
     const experienceIdParam = getQueryParam("experienceId");
-    if (encodedDataParam) {
-      try {
-        const data = decodeData(encodedDataParam);
-        if (data.sections) sections = data.sections;
-        if (data.name) currentExperienceName = data.name;
-        isClientView = true;
-      } catch (e) {
-        console.error("Error decoding experience data.", e);
-      }
-    } else if (experienceIdParam) {
+    if (experienceIdParam) {
       try {
         const storedExperiences = JSON.parse(localStorage.getItem("tempExperiences") || "{}");
         if (storedExperiences[experienceIdParam]) {
-          const data = storedExperiences[experienceIdParam];
-          sections = data.sections || [];
-          currentExperienceName = data.name || null;
+          sections = storedExperiences[experienceIdParam].sections;
+          currentExperienceName = storedExperiences[experienceIdParam].name || null;
           isClientView = true;
+        } else {
+          console.error("Experience ID not found in storage.");
+          alert("Error: Experience not found.");
         }
-      } catch(e) {
-        console.error("Error loading experience from storage.", e);
+      } catch (e) {
+        console.error("Error loading experience from storage:", e);
+        alert("Error loading experience data.");
       }
     }
 
@@ -859,7 +844,6 @@
     let analyticsData = JSON.parse(localStorage.getItem("analyticsData") || "[]");
     let editingExperienceId = null; // Track if we're editing an existing experience
     let experienceToDelete = null; // Track which experience to delete
-    let currentExperienceName = null; // Track the current experience name
     let lastSavedSections = JSON.stringify(sections); // Track the last saved state
     let duplicatingExperienceIndex = null; // Track which experience is being duplicated
     let generatedLink = ""; // Store the generated link
@@ -1321,6 +1305,13 @@
       let firstPage = true;
       let yOffset = 25;
 
+      // Add experience name as title on first page
+      if (currentExperienceName) {
+        pdf.setFontSize(16);
+        pdf.text(currentExperienceName, 105, 15, { align: "center" });
+        yOffset += 10;
+      }
+
       for (let sec = 0; sec < sections.length; sec++) {
         const keys = [...selectedImages].filter(k => k.startsWith(sec + "-"));
         if (keys.length === 0) continue;
@@ -1335,12 +1326,18 @@
           if (!firstPage) {
             pdf.addPage();
             yOffset = 25;
+            if (currentExperienceName) {
+              pdf.setFontSize(16);
+              pdf.text(currentExperienceName, 105, 15, { align: "center" });
+              yOffset += 10;
+            }
           }
           firstPage = false;
 
           // Section title
           pdf.setFontSize(16);
-          pdf.text(sections[sec].name, 105, 15, { align: "center" });
+          pdf.text(sections[sec].name, 105, yOffset, { align: "center" });
+          yOffset += 10;
 
           // Image
           pdf.addImage(dataURL, "PNG", 10, yOffset, pageW, imgH);
@@ -1406,18 +1403,18 @@
       spinner.style.display = "block";
       linkButtons.style.display = "none";
       setTimeout(() => {
-        // Generate unique experience ID for local usage
+        // Generate unique experience ID
         const experienceId = Date.now().toString();
-        // Store experience in localStorage (kept for backwards compatibility)
+        // Store experience in localStorage with name
         let storedExperiences = JSON.parse(localStorage.getItem("tempExperiences") || "{}");
         storedExperiences[experienceId] = {
-          name: currentExperienceName,
-          sections: JSON.parse(JSON.stringify(sections))
+          sections: JSON.parse(JSON.stringify(sections)),
+          name: currentExperienceName || "Untitled Experience"
         };
         localStorage.setItem("tempExperiences", JSON.stringify(storedExperiences));
-        // Generate shareable link containing encoded data
-        const encoded = encodeData({ name: currentExperienceName, sections });
-        generatedLink = window.location.origin + window.location.pathname + '?data=' + encoded;
+        // Generate shareable link with experienceId
+        const nameSlug = (currentExperienceName || 'Untitled').trim().replace(/\s+/g, '-').toLowerCase();
+        generatedLink = `${window.location.origin}${window.location.pathname}?experienceId=${experienceId}&experience=${encodeURIComponent(nameSlug)}`;
         autoSaveCurrentExperience();
         spinner.style.display = "none";
         linkButtons.style.display = "block";
@@ -1436,7 +1433,20 @@
       if (action === 'copy') {
         copyLink();
       } else if (action === 'preview') {
-        window.open(generatedLink, '_blank');
+        // Simulate client view for preview
+        const experienceId = getQueryParam("experienceId") || generatedLink.split("experienceId=")[1]?.split("&")[0];
+        if (experienceId) {
+          const storedExperiences = JSON.parse(localStorage.getItem("tempExperiences") || "{}");
+          if (storedExperiences[experienceId]) {
+            sections = JSON.parse(JSON.stringify(storedExperiences[experienceId].sections));
+            currentExperienceName = storedExperiences[experienceId].name;
+            isClientView = true;
+            showPage("client");
+            renderClient();
+          } else {
+            alert("Error: Experience not found for preview.");
+          }
+        }
       }
     }
 
@@ -1685,8 +1695,6 @@
       if (isClientView) {
         document.getElementById("client-page").style.display = "block";
         document.getElementById("navbar").style.display = "none";
-        const header = document.getElementById("client-header");
-        if (header) header.style.display = "none";
         return;
       }
 
@@ -1783,8 +1791,6 @@
       document.getElementById("business-page").style.display = "none";
       document.getElementById("admin-page").style.display = "none";
       document.getElementById("client-page").style.display = "block";
-      const header = document.getElementById("client-header");
-      if (header) header.style.display = "none";
       renderClient();
     } else {
       renderBusiness();
