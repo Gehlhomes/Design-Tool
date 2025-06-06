@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gehl Tech Interface</title>
+  <title>Gehl Homes Interphase</title>
   <!-- Load jsPDF from CDN -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <!-- Load fonts from Google Fonts -->
@@ -657,6 +657,16 @@
     <button id="nav-admin" onclick="showPage('admin')">Admin</button>
   </div>
 
+  <!-- Login Page -->
+  <div id="login-page" class="page">
+    <h1>Admin Login</h1>
+    <div style="text-align: center;">
+      <input type="password" id="admin-password" placeholder="Password">
+      <button onclick="login()">Login</button>
+    </div>
+    <p id="login-error" style="color: red; text-align: center; display: none;">Incorrect password</p>
+  </div>
+
   <!-- Business Interface Page -->
   <div id="business-page" class="page">
     <h1>Experience Builder</h1>
@@ -769,7 +779,10 @@
 
   <!-- Admin Page -->
   <div id="admin-page" class="page">
-    <h1>Gehl Tech Admin</h1>
+    <h1>Gehl Homes Admin</h1>
+    <div style="text-align: center; margin-bottom: 15px;">
+      <button onclick="logout()">Logout</button>
+    </div>
     <p style="text-align: center; color: #000;">View saved experiences and client submissions below.</p>
     <div id="admin-content">
       <!-- Admin content (saved experiences and client submissions) is rendered here -->
@@ -821,11 +834,9 @@
     // Set to keep track of selected images on the client page.
     let selectedImages = new Set();
     let showNumbering = false;
-    // Clear localStorage and initialize empty arrays on page load
-    localStorage.removeItem("savedExperiences");
-    localStorage.removeItem("analyticsData");
-    let savedExperiences = [];
-    let analyticsData = [];
+    // Load saved data from localStorage
+    let savedExperiences = JSON.parse(localStorage.getItem("savedExperiences") || "[]");
+    let analyticsData = JSON.parse(localStorage.getItem("analyticsData") || "[]");
     let editingExperienceId = null; // Track if we're editing an existing experience
     let experienceToDelete = null; // Track which experience to delete
     let currentExperienceName = null; // Track the current experience name
@@ -834,6 +845,9 @@
     let generatedLink = ""; // Store the generated link
     let currentPage = 'business'; // Track current page
     let targetPage = null; // Track page to navigate to after save prompt
+
+    const adminPassword = "admin"; // Simple password; change for production
+    let adminLoggedIn = localStorage.getItem("adminLoggedIn") === "true";
 
     /*****************************
      * Helper: Read File as Data *
@@ -1336,7 +1350,7 @@
       // Save PDF as Base64 for storage
       const pdfBase64 = pdf.output('datauristring');
       const pdfId = Date.now().toString(); // Unique ID for submission
-      pdf.save("gehl-tech-brochure.pdf");
+      pdf.save("gehl-homes-brochure.pdf");
 
       // Store in analytics
       analyticsData.push({
@@ -1631,6 +1645,17 @@
         return;
       }
 
+      if (page === 'admin' && !adminLoggedIn) {
+        document.getElementById("login-page").style.display = 'block';
+        document.getElementById("business-page").style.display = 'none';
+        document.getElementById("client-page").style.display = 'none';
+        document.getElementById("admin-page").style.display = 'none';
+        currentPage = 'login';
+        return;
+      } else {
+        document.getElementById("login-page").style.display = 'none';
+      }
+
       if (currentPage === 'business' && page !== 'business' && hasUnsavedChanges()) {
         closeAllPopups();
         targetPage = page;
@@ -1671,6 +1696,25 @@
       } else {
         renderBusiness();
       }
+    }
+
+    function login() {
+      const pass = document.getElementById("admin-password").value;
+      if (pass === adminPassword) {
+        adminLoggedIn = true;
+        localStorage.setItem("adminLoggedIn", "true");
+        document.getElementById("login-error").style.display = 'none';
+        document.getElementById("admin-password").value = '';
+        showPage('admin');
+      } else {
+        document.getElementById("login-error").style.display = 'block';
+      }
+    }
+
+    function logout() {
+      adminLoggedIn = false;
+      localStorage.removeItem("adminLoggedIn");
+      showPage('business');
     }
     
     /********************
