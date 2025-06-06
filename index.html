@@ -1401,7 +1401,7 @@
         const linkButtons = document.getElementById("link-buttons");
         spinner.style.display = "block";
         linkButtons.style.display = "none";
-        setTimeout(() => {
+        try {
           // Generate unique experience ID for local usage
           const experienceId = Date.now().toString();
           // Store experience in localStorage (kept for backwards compatibility)
@@ -1412,9 +1412,13 @@
           const encoded = encodeData(sections);
           generatedLink = window.location.origin + window.location.pathname + '?data=' + encoded;
           autoSaveCurrentExperience();
+        } catch (e) {
+          console.error("Error generating client link", e);
+          alert("Failed to generate link.");
+        } finally {
           spinner.style.display = "none";
           linkButtons.style.display = "block";
-        }, 1000); // Simulate 1-second processing
+        }
       }
 
       function showLinkPopup(action) {
@@ -1637,20 +1641,27 @@
     }
 
     function autoSaveCurrentExperience() {
-      if (currentExperienceName && editingExperienceId !== null) {
-        const index = savedExperiences.findIndex(exp => exp.id === editingExperienceId);
-        const data = {
-          id: editingExperienceId,
-          name: currentExperienceName,
-          sections: JSON.parse(JSON.stringify(sections))
-        };
-        if (index !== -1) {
-          savedExperiences[index] = data;
-        } else {
-          savedExperiences.push(data);
-        }
-        localStorage.setItem("savedExperiences", JSON.stringify(savedExperiences));
+      let name = currentExperienceName;
+      if (!name) {
+        name = "Untitled Experience";
       }
+      if (editingExperienceId === null) {
+        const maxId = savedExperiences.reduce((m, e) => Math.max(m, e.id), -1);
+        editingExperienceId = maxId + 1;
+      }
+      const data = {
+        id: editingExperienceId,
+        name: name,
+        sections: JSON.parse(JSON.stringify(sections))
+      };
+      const index = savedExperiences.findIndex(exp => exp.id === editingExperienceId);
+      if (index !== -1) {
+        savedExperiences[index] = data;
+      } else {
+        savedExperiences.push(data);
+      }
+      currentExperienceName = name;
+      localStorage.setItem("savedExperiences", JSON.stringify(savedExperiences));
     }
 
     function hidePopup(popupId) {
@@ -1777,8 +1788,12 @@
       document.getElementById("client-page").style.display = "block";
       renderClient();
     } else {
-      renderBusiness();
-      showPage('business'); // Start on Experience Builder
+      if (adminLoggedIn) {
+        showPage('admin');
+      } else {
+        renderBusiness();
+        showPage('business');
+      }
     }
 
     window.addEventListener('beforeunload', autoSaveCurrentExperience);
