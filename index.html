@@ -756,7 +756,7 @@
 
   <!-- Client Preview / Client Experience Page -->
   <div id="client-page" class="page">
-    <h1>Client Experience</h1>
+    <h1 id="client-header">Client Experience</h1>
     <h2 id="client-experience-title" class="experience-title" style="display: none;"></h2>
     <p class="welcome-text">This is an interactive Experience, select the items/images you like and at the end download your brochure that creates you a PDF with the items/images you selected.</p>
     <div id="client-content">
@@ -830,7 +830,9 @@
     const experienceIdParam = getQueryParam("experienceId");
     if (encodedDataParam) {
       try {
-        sections = decodeData(encodedDataParam);
+        const data = decodeData(encodedDataParam);
+        if (data.sections) sections = data.sections;
+        if (data.name) currentExperienceName = data.name;
         isClientView = true;
       } catch (e) {
         console.error("Error decoding experience data.", e);
@@ -839,7 +841,9 @@
       try {
         const storedExperiences = JSON.parse(localStorage.getItem("tempExperiences") || "{}");
         if (storedExperiences[experienceIdParam]) {
-          sections = storedExperiences[experienceIdParam].sections;
+          const data = storedExperiences[experienceIdParam];
+          sections = data.sections || [];
+          currentExperienceName = data.name || null;
           isClientView = true;
         }
       } catch(e) {
@@ -1406,10 +1410,13 @@
         const experienceId = Date.now().toString();
         // Store experience in localStorage (kept for backwards compatibility)
         let storedExperiences = JSON.parse(localStorage.getItem("tempExperiences") || "{}");
-        storedExperiences[experienceId] = { sections: JSON.parse(JSON.stringify(sections)) };
+        storedExperiences[experienceId] = {
+          name: currentExperienceName,
+          sections: JSON.parse(JSON.stringify(sections))
+        };
         localStorage.setItem("tempExperiences", JSON.stringify(storedExperiences));
         // Generate shareable link containing encoded data
-        const encoded = encodeData(sections);
+        const encoded = encodeData({ name: currentExperienceName, sections });
         generatedLink = window.location.origin + window.location.pathname + '?data=' + encoded;
         autoSaveCurrentExperience();
         spinner.style.display = "none";
@@ -1678,6 +1685,8 @@
       if (isClientView) {
         document.getElementById("client-page").style.display = "block";
         document.getElementById("navbar").style.display = "none";
+        const header = document.getElementById("client-header");
+        if (header) header.style.display = "none";
         return;
       }
 
@@ -1774,6 +1783,8 @@
       document.getElementById("business-page").style.display = "none";
       document.getElementById("admin-page").style.display = "none";
       document.getElementById("client-page").style.display = "block";
+      const header = document.getElementById("client-header");
+      if (header) header.style.display = "none";
       renderClient();
     } else {
       renderBusiness();
