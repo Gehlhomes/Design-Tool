@@ -1396,42 +1396,42 @@
     /***********************
      * Generate Client Link *
      ***********************/
-      function saveView() {
-        const spinner = document.getElementById("link-spinner");
-        const linkButtons = document.getElementById("link-buttons");
-        spinner.style.display = "block";
-        linkButtons.style.display = "none";
-        setTimeout(() => {
-          // Generate unique experience ID for local usage
-          const experienceId = Date.now().toString();
-          // Store experience in localStorage (kept for backwards compatibility)
-          let storedExperiences = JSON.parse(localStorage.getItem("tempExperiences") || "{}");
-          storedExperiences[experienceId] = { sections: JSON.parse(JSON.stringify(sections)) };
-          localStorage.setItem("tempExperiences", JSON.stringify(storedExperiences));
-          // Generate shareable link containing encoded data
-          const encoded = encodeData(sections);
-          generatedLink = window.location.origin + window.location.pathname + '?data=' + encoded;
-          autoSaveCurrentExperience();
-          spinner.style.display = "none";
-          linkButtons.style.display = "block";
-        }, 1000); // Simulate 1-second processing
-      }
+    function saveView() {
+      const spinner = document.getElementById("link-spinner");
+      const linkButtons = document.getElementById("link-buttons");
+      spinner.style.display = "block";
+      linkButtons.style.display = "none";
+      setTimeout(() => {
+        // Generate unique experience ID for local usage
+        const experienceId = Date.now().toString();
+        // Store experience in localStorage (kept for backwards compatibility)
+        let storedExperiences = JSON.parse(localStorage.getItem("tempExperiences") || "{}");
+        storedExperiences[experienceId] = { sections: JSON.parse(JSON.stringify(sections)) };
+        localStorage.setItem("tempExperiences", JSON.stringify(storedExperiences));
+        // Generate shareable link containing encoded data
+        const encoded = encodeData(sections);
+        generatedLink = window.location.origin + window.location.pathname + '?data=' + encoded;
+        autoSaveCurrentExperience();
+        spinner.style.display = "none";
+        linkButtons.style.display = "block";
+      }, 1000); // Simulate 1-second processing
+    }
 
-      function showLinkPopup(action) {
-        if (!generatedLink) {
-          alert("Please generate a client link first.");
-          return;
-        }
-        closeAllPopups();
-        const linkText = document.getElementById("link-text");
-        linkText.textContent = generatedLink;
-        document.getElementById("link-preview-popup").style.display = "flex";
-        if (action === 'copy') {
-          copyLink();
-        } else if (action === 'preview') {
-          window.open(generatedLink, '_blank');
-        }
+    function showLinkPopup(action) {
+      if (!generatedLink) {
+        alert("Please generate a client link first.");
+        return;
       }
+      closeAllPopups();
+      const linkText = document.getElementById("link-text");
+      linkText.textContent = generatedLink;
+      document.getElementById("link-preview-popup").style.display = "flex";
+      if (action === 'copy') {
+        copyLink();
+      } else if (action === 'preview') {
+        window.open(generatedLink, '_blank');
+      }
+    }
 
     function copyLink() {
       const linkText = document.getElementById("link-text");
@@ -1536,7 +1536,6 @@
       document.getElementById("link-buttons").style.display = "none";
       document.getElementById("link-spinner").style.display = "none";
       renderBusiness();
-      // Removed showPage('business') to prevent navigation loop
     }
 
     /****************************
