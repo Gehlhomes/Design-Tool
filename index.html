@@ -816,9 +816,9 @@
       return params.get(param);
     }
 
-    let isClientView = false;
-    let currentExperienceName = null;
     const experienceIdParam = getQueryParam("experienceId");
+    let isClientView = !!experienceIdParam; // Determine early if we're in client view
+    let currentExperienceName = null;
     if (experienceIdParam) {
       fetch(`/experiences/${experienceIdParam}`)
         .then(resp => {
@@ -1725,8 +1725,13 @@
      ***********************/
     function showPage(page) {
       if (isClientView) {
-        document.getElementById("client-page").style.display = "block";
         document.getElementById("navbar").style.display = "none";
+        document.getElementById("business-page").style.display = "none";
+        document.getElementById("admin-page").style.display = "none";
+        document.getElementById("client-page").style.display = "block";
+        if (page === 'client') {
+          renderClient();
+        }
         return;
       }
 
