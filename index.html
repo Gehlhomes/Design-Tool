@@ -1415,17 +1415,17 @@
       })
         .then(resp => resp.json())
         .then(data => {
-          return fetch('/server-address')
-            .then(r => r.ok ? r.json() : { address: window.location.hostname, port: window.location.port || 3000 })
-            .catch(() => ({ address: window.location.hostname, port: window.location.port || 3000 }))
-            .then(info => {
-              const base = `${window.location.protocol}//${info.address}:${info.port}${window.location.pathname}`;
-              const nameSlug = (currentExperienceName || 'Untitled').trim().replace(/\s+/g, '-').toLowerCase();
-              generatedLink = `${base}?experienceId=${data.id}&experience=${encodeURIComponent(nameSlug)}`;
-              ensureExperienceSavedLocally();
-              spinner.style.display = 'none';
-              linkButtons.style.display = 'block';
-            });
+          const base = window.location.origin + window.location.pathname;
+          const nameSlug = (currentExperienceName || 'Untitled')
+            .trim()
+            .replace(/\s+/g, '-')
+            .toLowerCase();
+          generatedLink = `${base}?experienceId=${data.id}&experience=${encodeURIComponent(
+            nameSlug
+          )}`;
+          ensureExperienceSavedLocally();
+          spinner.style.display = 'none';
+          linkButtons.style.display = 'block';
         })
         .catch(err => {
           console.error('Error saving experience:', err);
