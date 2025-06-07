@@ -1,5 +1,6 @@
 const http = require('http');
 const fs = require('fs');
+const path = require('path');
 const { URL } = require('url');
 
 const DATA_FILE = 'data.json';
@@ -51,6 +52,19 @@ const server = http.createServer((req, res) => {
   }
 
   const url = new URL(req.url, `http://${req.headers.host}`);
+
+  if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) {
+    fs.readFile(path.join(__dirname, 'index.html'), (err, content) => {
+      if (err) {
+        res.writeHead(500, { 'Content-Type': 'text/plain' });
+        res.end('Server error');
+      } else {
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.end(content);
+      }
+    });
+    return;
+  }
 
   if (req.method === 'POST' && url.pathname === '/experiences') {
     return parseRequestBody(req, body => {
