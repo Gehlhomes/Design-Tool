@@ -1,10 +1,6 @@
-const express = require('express');
+const http = require('http');
 const fs = require('fs');
-const cors = require('cors');
-
-const app = express();
-app.use(express.json({ limit: '10mb' }));
-app.use(cors());
+const { URL } = require('url');
 
 const DATA_FILE = 'data.json';
 let data = { experiences: {}, analytics: [] };
@@ -20,44 +16,85 @@ function saveData() {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 }
 
-// Save new experience and return id
-app.post('/experiences', (req, res) => {
-  const id = Date.now().toString();
-  const { sections, name } = req.body;
-  data.experiences[id] = { sections, name };
-  saveData();
-  res.json({ id });
-});
+function sendJson(res, status, obj) {
+  res.writeHead(status, {
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type'
+  });
+  res.end(JSON.stringify(obj));
+}
 
-// Get experience by id
-app.get('/experiences/:id', (req, res) => {
-  const exp = data.experiences[req.params.id];
-  if (exp) {
-    res.json(exp);
-  } else {
-    res.status(404).json({ error: 'Not found' });
+function parseRequestBody(req, callback) {
+  let body = '';
+  req.on('data', chunk => (body += chunk));
+  req.on('end', () => {
+    try {
+      callback(body ? JSON.parse(body) : {});
+    } catch {
+      callback({});
+    }
+  });
+}
+
+const server = http.createServer((req, res) => {
+  // CORS preflight
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type'
+    });
+    res.end();
+    return;
   }
-});
 
-// Add analytics record
-app.post('/analytics', (req, res) => {
-  const record = {
-    id: Date.now().toString(),
-    email: req.body.email,
-    count: req.body.count,
-    pdfBase64: req.body.pdfBase64,
-  };
-  data.analytics.push(record);
-  saveData();
-  res.json({ success: true });
-});
+  const url = new URL(req.url, `http://${req.headers.host}`);
 
-// Fetch analytics records
-app.get('/analytics', (req, res) => {
-  res.json(data.analytics);
+  if (req.method === 'POST' && url.pathname === '/experiences') {
+    return parseRequestBody(req, body => {
+      const id = Date.now().toString();
+      const { sections, name } = body;
+      data.experiences[id] = { sections, name };
+      saveData();
+      sendJson(res, 200, { id });
+    });
+  }
+
+  if (req.method === 'GET' && url.pathname.startsWith('/experiences/')) {
+    const id = url.pathname.split('/')[2];
+    const exp = data.experiences[id];
+    if (exp) {
+      sendJson(res, 200, exp);
+    } else {
+      sendJson(res, 404, { error: 'Not found' });
+    }
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/analytics') {
+    return parseRequestBody(req, body => {
+      const record = {
+        id: Date.now().toString(),
+        email: body.email,
+        count: body.count,
+        pdfBase64: body.pdfBase64
+      };
+      data.analytics.push(record);
+      saveData();
+      sendJson(res, 200, { success: true });
+    });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/analytics') {
+    return sendJson(res, 200, data.analytics);
+  }
+
+  sendJson(res, 404, { error: 'Not found' });
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
