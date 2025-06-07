@@ -2,6 +2,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { URL } = require('url');
+const os = require('os');
 
 const DATA_FILE = 'data.json';
 let data = { experiences: {}, analytics: [] };
@@ -15,6 +16,18 @@ if (fs.existsSync(DATA_FILE)) {
 
 function saveData() {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+}
+
+function getLocalAddress() {
+  const nets = os.networkInterfaces();
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name]) {
+      if (net.family === 'IPv4' && !net.internal) {
+        return net.address;
+      }
+    }
+  }
+  return 'localhost';
 }
 
 function sendJson(res, status, obj) {
@@ -52,6 +65,11 @@ const server = http.createServer((req, res) => {
   }
 
   const url = new URL(req.url, `http://${req.headers.host}`);
+
+  if (req.method === 'GET' && url.pathname === '/server-address') {
+    const address = getLocalAddress();
+    return sendJson(res, 200, { address, port: PORT });
+  }
 
   if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) {
     fs.readFile(path.join(__dirname, 'index.html'), (err, content) => {
