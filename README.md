@@ -1,6 +1,6 @@
 # Design Tool SaaS
 
-This repository contains a simple Node server and single-page application for building experiences. The app now supports per-user data storage via Supabase and integrates with Memberstack for authentication on the client side.
+This repository contains a simple Node server and single-page application for building experiences. The app now supports per-user data storage via Supabase and uses Memberstack for user authentication. Visitors must log in or sign up before accessing the builder.
 
 ## Environment Variables
 

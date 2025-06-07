@@ -664,6 +664,22 @@
     <button id="nav-admin" onclick="showPage('admin')">Admin</button>
   </div>
 
+  <!-- Member Login / Signup Page -->
+  <div id="auth-page" class="page" style="display: none; text-align: center;">
+    <h1>Account Access</h1>
+    <form data-ms-form="login" data-ms-redirect="/" style="margin-bottom: 20px;">
+      <input type="email" data-ms-member="email" placeholder="Email" required>
+      <input type="password" data-ms-member="password" placeholder="Password" required>
+      <button type="submit">Login</button>
+    </form>
+    <p>or</p>
+    <form data-ms-form="signup" data-ms-redirect="/">
+      <input type="email" data-ms-member="email" placeholder="Email" required>
+      <input type="password" data-ms-member="password" placeholder="Password" required>
+      <button type="submit">Sign Up</button>
+    </form>
+  </div>
+
   <!-- Login Page -->
   <div id="login-page" class="page">
     <h1>Admin Login</h1>
@@ -1968,13 +1984,35 @@
 
     window.addEventListener('beforeunload', autoSaveCurrentExperience);
 
+    function showAuthPage() {
+      document.getElementById('auth-page').style.display = 'block';
+      document.getElementById('navbar').style.display = 'none';
+      document.getElementById('business-page').style.display = 'none';
+      document.getElementById('client-page').style.display = 'none';
+      document.getElementById('admin-page').style.display = 'none';
+      document.getElementById('login-page').style.display = 'none';
+    }
+
     if (window.$memberstackDom) {
       window.$memberstackDom.getCurrentMember()
         .then(({ data: member }) => {
-          if (member) memberId = member.id;
-          startApp();
+          if (member && member.id) {
+            memberId = member.id;
+            startApp();
+          } else {
+            showAuthPage();
+          }
         })
-        .catch(startApp);
+        .catch(showAuthPage);
+
+      window.$memberstackDom.addEventListener('member:login', ({ detail }) => {
+        if (detail && detail.member && detail.member.id) {
+          memberId = detail.member.id;
+          document.getElementById('auth-page').style.display = 'none';
+          document.getElementById('navbar').style.display = 'block';
+          startApp();
+        }
+      });
     } else {
       startApp();
     }
