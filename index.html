@@ -938,6 +938,7 @@ async function fetchAnalyticsFromServer() {
             sections = data.sections;
             currentExperienceName = data.name || null;
             isClientView = true;
+            lastSavedSections = JSON.stringify(sections);
           } else {
             console.error('Experience ID not found.');
             alert('Error: Experience not found.');
@@ -1278,13 +1279,14 @@ async function fetchAnalyticsFromServer() {
           previewButton.textContent = "Preview Experience";
           previewButton.onclick = async function() {
             let data = exp.sections ? exp : await dbGet('experiences', exp.id);
-            if (data) {
-              const tempSections = JSON.parse(JSON.stringify(data.sections));
-              sections = tempSections;
-              currentExperienceName = data.name;
-              showPage("client");
-              renderClient();
-            } else {
+          if (data) {
+            const tempSections = JSON.parse(JSON.stringify(data.sections));
+            sections = tempSections;
+            currentExperienceName = data.name;
+            lastSavedSections = JSON.stringify(sections);
+            showPage("client");
+            renderClient();
+          } else {
               alert("Error loading experience for preview.");
             }
           };
@@ -1521,6 +1523,9 @@ async function fetchAnalyticsFromServer() {
       await fetchAnalyticsFromServer();
       renderAdmin(); // Refresh Admin to show new submission
     }
+
+    function downloadUserPDF(pdfId) {
+      const record = analyticsData.find(rec => rec.id === pdfId);
       if (record && record.pdfBase64) {
         const link = document.createElement('a');
         link.href = record.pdfBase64;
@@ -1586,6 +1591,7 @@ async function fetchAnalyticsFromServer() {
             sections = JSON.parse(JSON.stringify(data.sections));
             currentExperienceName = data.name;
             isClientView = true;
+            lastSavedSections = JSON.stringify(sections);
             showPage("client");
             renderClient();
           } else {
