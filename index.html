@@ -816,76 +816,23 @@
       return params.get(param);
     }
 
-    /**********************
-     * IndexedDB Helpers  *
-     **********************/
-    function openDB() {
-      return new Promise((resolve, reject) => {
-        const request = indexedDB.open('designToolDB', 1);
-        request.onupgradeneeded = function(event) {
-          const db = event.target.result;
-          if (!db.objectStoreNames.contains('experiences')) {
-            db.createObjectStore('experiences', { keyPath: 'id' });
-          }
-          if (!db.objectStoreNames.contains('tempExperiences')) {
-            db.createObjectStore('tempExperiences', { keyPath: 'id' });
-          }
-        };
-        request.onsuccess = e => resolve(e.target.result);
-        request.onerror = e => reject(e.target.error);
-      });
-    }
-
-    async function dbSet(store, data) {
-      const db = await openDB();
-      return new Promise((resolve, reject) => {
-        const tx = db.transaction(store, 'readwrite');
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-        tx.objectStore(store).put(data);
-      });
-    }
-
-    async function dbGet(store, id) {
-      const db = await openDB();
-      return new Promise((resolve, reject) => {
-        const tx = db.transaction(store, 'readonly');
-        const req = tx.objectStore(store).get(id);
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-      });
-    }
-
-    async function dbDelete(store, id) {
-      const db = await openDB();
-      return new Promise((resolve, reject) => {
-        const tx = db.transaction(store, 'readwrite');
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-        tx.objectStore(store).delete(id);
-      });
-    }
-
     let isClientView = false;
     let currentExperienceName = null;
-
-    async function initFromUrl() {
-      const experienceIdParam = getQueryParam("experienceId");
-      if (experienceIdParam) {
-        try {
-          const data = await dbGet('tempExperiences', experienceIdParam);
-          if (data) {
-            sections = data.sections;
-            currentExperienceName = data.name || null;
-            isClientView = true;
-          } else {
-            console.error('Experience ID not found in storage.');
-            alert('Error: Experience not found.');
-          }
-        } catch (e) {
-          console.error('Error loading experience from storage:', e);
-          alert('Error loading experience data.');
+    const experienceIdParam = getQueryParam("experienceId");
+    if (experienceIdParam) {
+      try {
+        const storedExperiences = JSON.parse(localStorage.getItem("tempExperiences") || "{}");
+        if (storedExperiences[experienceIdParam]) {
+          sections = storedExperiences[experienceIdParam].sections;
+          currentExperienceName = storedExperiences[experienceIdParam].name || null;
+          isClientView = true;
+        } else {
+          console.error("Experience ID not found in storage.");
+          alert("Error: Experience not found.");
         }
+      } catch (e) {
+        console.error("Error loading experience from storage:", e);
+        alert("Error loading experience data.");
       }
     }
 
@@ -895,20 +842,6 @@
     // Load saved data from localStorage
     let savedExperiences = JSON.parse(localStorage.getItem("savedExperiences") || "[]");
     let analyticsData = JSON.parse(localStorage.getItem("analyticsData") || "[]");
-
-    async function migrateSavedExperiences() {
-      let changed = false;
-      for (const exp of savedExperiences) {
-        if (exp.sections) {
-          await dbSet('experiences', { id: exp.id, name: exp.name, sections: exp.sections });
-          delete exp.sections;
-          changed = true;
-        }
-      }
-      if (changed) {
-        localStorage.setItem("savedExperiences", JSON.stringify(savedExperiences));
-      }
-    }
     let editingExperienceId = null; // Track if we're editing an existing experience
     let experienceToDelete = null; // Track which experience to delete
     let lastSavedSections = JSON.stringify(sections); // Track the last saved state
@@ -1216,35 +1149,25 @@
           const previewButton = document.createElement("button");
           previewButton.className = "saved-experience-btn";
           previewButton.textContent = "Preview Experience";
-          previewButton.onclick = async function() {
-            let data = exp.sections ? exp : await dbGet('experiences', exp.id);
-            if (data) {
-              const tempSections = JSON.parse(JSON.stringify(data.sections));
-              sections = tempSections;
-              currentExperienceName = data.name;
-              showPage("client");
-              renderClient();
-            } else {
-              alert("Error loading experience for preview.");
-            }
+          previewButton.onclick = function() {
+            const tempSections = JSON.parse(JSON.stringify(exp.sections));
+            sections = tempSections;
+            currentExperienceName = exp.name;
+            showPage("client");
+            renderClient();
           };
           expDiv.appendChild(previewButton);
 
           const editButton = document.createElement("button");
           editButton.className = "saved-experience-btn";
           editButton.textContent = "Edit Experience";
-          editButton.onclick = async function() {
-            let data = exp.sections ? exp : await dbGet('experiences', exp.id);
-            if (data) {
-              sections = JSON.parse(JSON.stringify(data.sections));
-              lastSavedSections = JSON.stringify(sections);
-              currentExperienceName = data.name;
-              editingExperienceId = data.id;
-              showPage("business");
-              renderBusiness();
-            } else {
-              alert("Error loading experience for editing.");
-            }
+          editButton.onclick = function() {
+            sections = JSON.parse(JSON.stringify(exp.sections));
+            lastSavedSections = JSON.stringify(sections);
+            currentExperienceName = exp.name;
+            editingExperienceId = exp.id;
+            showPage("business");
+            renderBusiness();
           };
           expDiv.appendChild(editButton);
 
@@ -1255,10 +1178,8 @@
             experienceToDelete = expIndex;
             document.getElementById("delete-experience-popup").style.display = "flex";
             document.getElementById("confirm-delete").onclick = function() {
-              const expId = savedExperiences[experienceToDelete].id;
               savedExperiences.splice(experienceToDelete, 1);
               localStorage.setItem("savedExperiences", JSON.stringify(savedExperiences));
-              dbDelete('experiences', expId);
               experienceToDelete = null;
               hidePopup('delete-experience-popup');
               renderAdmin();
@@ -1476,36 +1397,31 @@
     /***********************
      * Generate Client Link *
      ***********************/
-    async function saveView() {
+    function saveView() {
       const spinner = document.getElementById("link-spinner");
       const linkButtons = document.getElementById("link-buttons");
       spinner.style.display = "block";
       linkButtons.style.display = "none";
-      setTimeout(async () => {
-        try {
-          // Generate unique experience ID
-          const experienceId = Date.now().toString();
-          // Store experience in IndexedDB
-          await dbSet('tempExperiences', {
-            id: experienceId,
-            sections: JSON.parse(JSON.stringify(sections)),
-            name: currentExperienceName || 'Untitled Experience'
-          });
-          // Generate shareable link with experienceId
-          const nameSlug = (currentExperienceName || 'Untitled').trim().replace(/\s+/g, '-').toLowerCase();
-          generatedLink = `${window.location.origin}${window.location.pathname}?experienceId=${experienceId}&experience=${encodeURIComponent(nameSlug)}`;
-          autoSaveCurrentExperience();
-          spinner.style.display = "none";
-          linkButtons.style.display = "block";
-        } catch (e) {
-          console.error('Error saving experience:', e);
-          spinner.style.display = "none";
-          alert('Error generating link. Experience may be too large for storage.');
-        }
+      setTimeout(() => {
+        // Generate unique experience ID
+        const experienceId = Date.now().toString();
+        // Store experience in localStorage with name
+        let storedExperiences = JSON.parse(localStorage.getItem("tempExperiences") || "{}");
+        storedExperiences[experienceId] = {
+          sections: JSON.parse(JSON.stringify(sections)),
+          name: currentExperienceName || "Untitled Experience"
+        };
+        localStorage.setItem("tempExperiences", JSON.stringify(storedExperiences));
+        // Generate shareable link with experienceId
+        const nameSlug = (currentExperienceName || 'Untitled').trim().replace(/\s+/g, '-').toLowerCase();
+        generatedLink = `${window.location.origin}${window.location.pathname}?experienceId=${experienceId}&experience=${encodeURIComponent(nameSlug)}`;
+        autoSaveCurrentExperience();
+        spinner.style.display = "none";
+        linkButtons.style.display = "block";
       }, 1000); // Simulate 1-second processing
     }
 
-    async function showLinkPopup(action) {
+    function showLinkPopup(action) {
       if (!generatedLink) {
         alert("Please generate a client link first.");
         return;
@@ -1520,10 +1436,10 @@
         // Simulate client view for preview
         const experienceId = getQueryParam("experienceId") || generatedLink.split("experienceId=")[1]?.split("&")[0];
         if (experienceId) {
-          const data = await dbGet('tempExperiences', experienceId);
-          if (data) {
-            sections = JSON.parse(JSON.stringify(data.sections));
-            currentExperienceName = data.name;
+          const storedExperiences = JSON.parse(localStorage.getItem("tempExperiences") || "{}");
+          if (storedExperiences[experienceId]) {
+            sections = JSON.parse(JSON.stringify(storedExperiences[experienceId].sections));
+            currentExperienceName = storedExperiences[experienceId].name;
             isClientView = true;
             showPage("client");
             renderClient();
@@ -1589,7 +1505,7 @@
       }
     }
 
-    async function saveNamedExperience() {
+    function saveNamedExperience() {
       const name = document.getElementById("experience-name").value.trim();
       if (!name) {
         document.getElementById("name-error").textContent = "Please enter a name";
@@ -1602,17 +1518,15 @@
         document.getElementById("name-error").style.display = "block";
         return;
       }
-      const newId = Date.now().toString();
       const newExperience = {
-        id: newId,
+        id: savedExperiences.length,
         name: name,
         sections: JSON.parse(JSON.stringify(sections))
       };
-      savedExperiences.push({ id: newId, name: name });
+      savedExperiences.push(newExperience);
       localStorage.setItem("savedExperiences", JSON.stringify(savedExperiences));
-      await dbSet('experiences', newExperience);
       currentExperienceName = name;
-      editingExperienceId = newId;
+      editingExperienceId = newExperience.id;
       lastSavedSections = JSON.stringify(sections);
       hidePopup("save-name-popup");
       closeAllPopups();
@@ -1644,17 +1558,16 @@
     /****************************
      * Save Experience          *
      ****************************/
-    async function saveExperience() {
+    function saveExperience() {
       if (currentExperienceName && editingExperienceId !== null) {
         // Update existing named experience
         const index = savedExperiences.findIndex(exp => exp.id === editingExperienceId);
         if (index !== -1) {
-          savedExperiences[index].name = currentExperienceName;
-          await dbSet('experiences', {
+          savedExperiences[index] = {
             id: editingExperienceId,
             name: currentExperienceName,
             sections: JSON.parse(JSON.stringify(sections))
-          });
+          };
           lastSavedSections = JSON.stringify(sections);
           localStorage.setItem("savedExperiences", JSON.stringify(savedExperiences));
           hidePopup("save-name-popup");
@@ -1674,18 +1587,17 @@
     /****************************
      * Save Changes Before Leaving
      ****************************/
-    async function saveChangesAndNavigate() {
+    function saveChangesAndNavigate() {
       if (currentExperienceName && editingExperienceId !== null) {
         // Save to existing named experience
         const index = savedExperiences.findIndex(exp => exp.id === editingExperienceId);
         if (index !== -1) {
-          savedExperiences[index].name = currentExperienceName;
-          localStorage.setItem("savedExperiences", JSON.stringify(savedExperiences));
-          await dbSet('experiences', {
+          savedExperiences[index] = {
             id: editingExperienceId,
             name: currentExperienceName,
             sections: JSON.parse(JSON.stringify(sections))
-          });
+          };
+          localStorage.setItem("savedExperiences", JSON.stringify(savedExperiences));
           lastSavedSections = JSON.stringify(sections);
           hidePopup("save-changes-popup");
           closeAllPopups();
@@ -1713,7 +1625,7 @@
     /****************************
      * Duplicate Experience     *
      ****************************/
-    async function createDuplicatedExperience() {
+    function createDuplicatedExperience() {
       const name = document.getElementById("duplicate-experience-name").value.trim();
       if (!name) {
         document.getElementById("duplicate-name-error").textContent = "Please enter a name";
@@ -1726,39 +1638,34 @@
         return;
       }
       if (duplicatingExperienceIndex !== null) {
-        const meta = savedExperiences[duplicatingExperienceIndex];
-        let data = meta.sections ? meta : await dbGet('experiences', meta.id);
-        if (data) {
-          const newId = Date.now().toString();
-          const newExperience = {
-            id: newId,
-            name: name,
-            sections: JSON.parse(JSON.stringify(data.sections))
-          };
-          savedExperiences.push({ id: newId, name: name });
-          localStorage.setItem("savedExperiences", JSON.stringify(savedExperiences));
-          await dbSet('experiences', newExperience);
-          duplicatingExperienceIndex = null;
-          hidePopup("duplicate-experience-popup");
-          renderAdmin();
-        }
+        const exp = savedExperiences[duplicatingExperienceIndex];
+        const newExperience = {
+          id: savedExperiences.length,
+          name: name,
+          sections: JSON.parse(JSON.stringify(exp.sections))
+        };
+        savedExperiences.push(newExperience);
+        localStorage.setItem("savedExperiences", JSON.stringify(savedExperiences));
+        duplicatingExperienceIndex = null;
+        hidePopup("duplicate-experience-popup");
+        renderAdmin();
       }
     }
 
     function autoSaveCurrentExperience() {
       if (currentExperienceName && editingExperienceId !== null) {
         const index = savedExperiences.findIndex(exp => exp.id === editingExperienceId);
-        if (index !== -1) {
-          savedExperiences[index].name = currentExperienceName;
-        } else {
-          savedExperiences.push({ id: editingExperienceId, name: currentExperienceName });
-        }
-        localStorage.setItem("savedExperiences", JSON.stringify(savedExperiences));
-        dbSet('experiences', {
+        const data = {
           id: editingExperienceId,
           name: currentExperienceName,
           sections: JSON.parse(JSON.stringify(sections))
-        });
+        };
+        if (index !== -1) {
+          savedExperiences[index] = data;
+        } else {
+          savedExperiences.push(data);
+        }
+        localStorage.setItem("savedExperiences", JSON.stringify(savedExperiences));
       }
     }
 
@@ -1879,23 +1786,18 @@
     /***********************
      * Initial Render      *
      ***********************/
-    async function main() {
-      await migrateSavedExperiences();
-      await initFromUrl();
-      if (isClientView) {
-        document.getElementById("navbar").style.display = "none";
-        document.getElementById("business-page").style.display = "none";
-        document.getElementById("admin-page").style.display = "none";
-        document.getElementById("client-page").style.display = "block";
-        renderClient();
-      } else {
-        renderBusiness();
-        showPage('business'); // Start on Experience Builder
-      }
-      window.addEventListener('beforeunload', autoSaveCurrentExperience);
+    if (isClientView) {
+      document.getElementById("navbar").style.display = "none";
+      document.getElementById("business-page").style.display = "none";
+      document.getElementById("admin-page").style.display = "none";
+      document.getElementById("client-page").style.display = "block";
+      renderClient();
+    } else {
+      renderBusiness();
+      showPage('business'); // Start on Experience Builder
     }
 
-    main();
+    window.addEventListener('beforeunload', autoSaveCurrentExperience);
   </script>
 </body>
 </html>
