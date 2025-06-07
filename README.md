@@ -1,6 +1,6 @@
 # Design Tool SaaS
 
-This repository contains a simple Node server and single-page application for building experiences. The app now supports per-user data storage via Supabase and uses Memberstack for user authentication. Visitors must log in or sign up before accessing the builder.
+This repository contains a simple Node server and single-page application for building experiences. A built-in username/password system handles authentication. The default account is `gehlhomes` with password `GEadmin`, and additional users can sign up to create their own experiences. All data is stored per user and may optionally be backed by Supabase.
 
 ## Environment Variables
 
