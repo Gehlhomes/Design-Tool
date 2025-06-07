@@ -15,15 +15,26 @@ const supabase = supabaseUrl && supabaseKey && createClient
   : null;
 
 // Allow specifying a custom path for the data file so deployments can
-// store it on a persistent volume. Defaults to "data.json" in the
-// application directory.
-const DATA_FILE = process.env.DATA_FILE || 'data.json';
+// store it on a persistent volume. If DATA_FILE is not provided, use a
+// default location inside the user's home directory so the file isn't
+// replaced when the application code is updated.
+const DEFAULT_DATA_FILE = path.join(os.homedir(), 'design-tool', 'data.json');
+const DATA_FILE = process.env.DATA_FILE || DEFAULT_DATA_FILE;
 let data = { experiences: {}, analytics: [], users: {} };
-if (!supabase && fs.existsSync(DATA_FILE)) {
+if (!supabase) {
   try {
-    data = JSON.parse(fs.readFileSync(DATA_FILE));
+    fs.mkdirSync(path.dirname(DATA_FILE), { recursive: true });
   } catch (e) {
-    console.error('Failed to parse data file:', e);
+    console.error('Failed to create data directory:', e);
+  }
+  if (fs.existsSync(DATA_FILE)) {
+    try {
+      data = JSON.parse(fs.readFileSync(DATA_FILE));
+    } catch (e) {
+      console.error('Failed to parse data file:', e);
+    }
+  } else {
+    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
   }
 }
 
