@@ -207,15 +207,16 @@
 
     .business-images img, .client-images-grid img {
       width: 100%;
-      height: 200px;
-      object-fit: cover;
+      height: auto;
+      max-height: 200px;
+      object-fit: contain;
       border-radius: 8px;
       border: 2px solid rgba(255, 255, 255, 0.1);
       transition: all 0.3s;
     }
 
     .client-images-grid img {
-      height: 300px;
+      max-height: 300px;
     }
 
     .client-images-grid img:hover {
@@ -555,11 +556,13 @@
       }
 
       .business-images img, .client-images-grid img {
-        height: 150px;
+        height: auto;
+        max-height: 150px;
+        object-fit: contain;
       }
 
       .client-images-grid img {
-        height: 200px;
+        max-height: 200px;
       }
 
       .section-number {
@@ -617,11 +620,13 @@
       }
 
       .business-images img, .client-images-grid img {
-        height: 120px;
+        height: auto;
+        max-height: 120px;
+        object-fit: contain;
       }
 
       .client-images-grid img {
-        height: 160px;
+        max-height: 160px;
       }
 
       .section-number {
@@ -841,9 +846,9 @@
     // Set to keep track of selected images on the client page.
     let selectedImages = new Set();
     let showNumbering = false;
-    // Load saved data from localStorage
-    let savedExperiences = JSON.parse(localStorage.getItem("savedExperiences") || "[]");
-    let analyticsData = JSON.parse(localStorage.getItem("analyticsData") || "[]");
+    // Data loaded from the server at startup
+    let savedExperiences = [];
+    let analyticsData = [];
     let editingExperienceId = null; // Track if we're editing an existing experience
     let experienceToDelete = null; // Track which experience to delete
     let lastSavedSections = JSON.stringify(sections); // Track the last saved state
@@ -860,20 +865,12 @@
         .then(r => (r.ok ? r.json() : []))
         .then(list => {
           savedExperiences = list;
-          safeSetItem(
-            'savedExperiences',
-            JSON.stringify(savedExperiences)
-          );
           if (adminLoggedIn) renderAdmin();
         });
       fetch('/analytics')
         .then(r => (r.ok ? r.json() : []))
         .then(list => {
           analyticsData = list;
-          safeSetItem(
-            'analyticsData',
-            JSON.stringify(analyticsData)
-          );
           if (adminLoggedIn) renderAdmin();
         });
     }
@@ -1168,7 +1165,6 @@
           nameSpan.contentEditable = true;
           nameSpan.onblur = function() {
             exp.name = nameSpan.textContent.trim() || `Experience ${expIndex + 1}`;
-            safeSetItem("savedExperiences", JSON.stringify(savedExperiences));
             renderAdmin();
           };
           nameSpan.onkeypress = function(e) {
@@ -1216,10 +1212,6 @@
                 .then(resp => {
                   if (!resp.ok) throw new Error();
                   savedExperiences.splice(experienceToDelete, 1);
-                  safeSetItem(
-                    'savedExperiences',
-                    JSON.stringify(savedExperiences)
-                  );
                   experienceToDelete = null;
                   hidePopup('delete-experience-popup');
                   renderAdmin();
@@ -1425,10 +1417,6 @@
         .then(resp => {
           if (!resp.ok) throw new Error();
           analyticsData.push(record);
-          safeSetItem(
-            'analyticsData',
-            JSON.stringify(analyticsData)
-          );
           renderAdmin();
         })
         .catch(() => alert('Failed to store analytics.'));
@@ -1491,10 +1479,7 @@
               };
             }
           }
-          safeSetItem(
-            'savedExperiences',
-            JSON.stringify(savedExperiences)
-          );
+          // local caching removed to avoid storage limits
           const base = window.location.origin + window.location.pathname;
           const nameSlug = (currentExperienceName || 'Untitled')
             .trim()
@@ -1575,7 +1560,6 @@
               name: currentExperienceName,
               sections: JSON.parse(JSON.stringify(sections))
             };
-            safeSetItem("savedExperiences", JSON.stringify(savedExperiences));
             lastSavedSections = JSON.stringify(sections);
             hidePopup("new-experience-popup");
             resetToNewExperience();
@@ -1627,10 +1611,6 @@
             sections: payload.sections
           };
           savedExperiences.push(newExperience);
-          safeSetItem(
-            'savedExperiences',
-            JSON.stringify(savedExperiences)
-          );
           currentExperienceName = name;
           editingExperienceId = newExperience.id;
           lastSavedSections = JSON.stringify(sections);
@@ -1688,10 +1668,6 @@
                 sections: payload.sections
               };
               lastSavedSections = JSON.stringify(sections);
-              safeSetItem(
-                'savedExperiences',
-                JSON.stringify(savedExperiences)
-              );
               hidePopup('save-name-popup');
               closeAllPopups();
               renderAdmin();
@@ -1733,10 +1709,6 @@
                 name: currentExperienceName,
                 sections: payload.sections
               };
-              safeSetItem(
-                'savedExperiences',
-                JSON.stringify(savedExperiences)
-              );
               lastSavedSections = JSON.stringify(sections);
               hidePopup('save-changes-popup');
               closeAllPopups();
@@ -1797,10 +1769,6 @@
               sections: payload.sections
             };
             savedExperiences.push(newExperience);
-            safeSetItem(
-              'savedExperiences',
-              JSON.stringify(savedExperiences)
-            );
             duplicatingExperienceIndex = null;
             hidePopup('duplicate-experience-popup');
             renderAdmin();
@@ -1822,10 +1790,6 @@
         } else {
           savedExperiences.push(data);
         }
-        safeSetItem(
-          "savedExperiences",
-          JSON.stringify(savedExperiences)
-        );
         fetch(`/experiences/${editingExperienceId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -1851,7 +1815,6 @@
       }
       editingExperienceId = data.id;
       lastSavedSections = JSON.stringify(sections);
-      safeSetItem("savedExperiences", JSON.stringify(savedExperiences));
     }
 
     function hidePopup(popupId) {
