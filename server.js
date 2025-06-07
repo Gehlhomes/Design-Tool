@@ -4,7 +4,10 @@ const path = require('path');
 const { URL } = require('url');
 const os = require('os');
 
-const DATA_FILE = 'data.json';
+// Allow specifying a custom path for the data file so deployments can
+// store it on a persistent volume. Defaults to "data.json" in the
+// application directory.
+const DATA_FILE = process.env.DATA_FILE || 'data.json';
 let data = { experiences: {}, analytics: [] };
 if (fs.existsSync(DATA_FILE)) {
   try {
