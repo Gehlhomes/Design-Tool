@@ -860,7 +860,7 @@
         .then(r => (r.ok ? r.json() : []))
         .then(list => {
           savedExperiences = list;
-          localStorage.setItem(
+          safeSetItem(
             'savedExperiences',
             JSON.stringify(savedExperiences)
           );
@@ -870,7 +870,7 @@
         .then(r => (r.ok ? r.json() : []))
         .then(list => {
           analyticsData = list;
-          localStorage.setItem(
+          safeSetItem(
             'analyticsData',
             JSON.stringify(analyticsData)
           );
@@ -892,6 +892,14 @@
         };
         reader.readAsDataURL(file);
       });
+    }
+
+    function safeSetItem(key, value) {
+      try {
+        localStorage.setItem(key, value);
+      } catch (e) {
+        console.warn('localStorage quota exceeded for', key, e);
+      }
     }
     
     /************************
@@ -1160,7 +1168,7 @@
           nameSpan.contentEditable = true;
           nameSpan.onblur = function() {
             exp.name = nameSpan.textContent.trim() || `Experience ${expIndex + 1}`;
-            localStorage.setItem("savedExperiences", JSON.stringify(savedExperiences));
+            safeSetItem("savedExperiences", JSON.stringify(savedExperiences));
             renderAdmin();
           };
           nameSpan.onkeypress = function(e) {
@@ -1208,7 +1216,7 @@
                 .then(resp => {
                   if (!resp.ok) throw new Error();
                   savedExperiences.splice(experienceToDelete, 1);
-                  localStorage.setItem(
+                  safeSetItem(
                     'savedExperiences',
                     JSON.stringify(savedExperiences)
                   );
@@ -1417,7 +1425,7 @@
         .then(resp => {
           if (!resp.ok) throw new Error();
           analyticsData.push(record);
-          localStorage.setItem(
+          safeSetItem(
             'analyticsData',
             JSON.stringify(analyticsData)
           );
@@ -1483,7 +1491,7 @@
               };
             }
           }
-          localStorage.setItem(
+          safeSetItem(
             'savedExperiences',
             JSON.stringify(savedExperiences)
           );
@@ -1567,7 +1575,7 @@
               name: currentExperienceName,
               sections: JSON.parse(JSON.stringify(sections))
             };
-            localStorage.setItem("savedExperiences", JSON.stringify(savedExperiences));
+            safeSetItem("savedExperiences", JSON.stringify(savedExperiences));
             lastSavedSections = JSON.stringify(sections);
             hidePopup("new-experience-popup");
             resetToNewExperience();
@@ -1619,7 +1627,7 @@
             sections: payload.sections
           };
           savedExperiences.push(newExperience);
-          localStorage.setItem(
+          safeSetItem(
             'savedExperiences',
             JSON.stringify(savedExperiences)
           );
@@ -1680,7 +1688,7 @@
                 sections: payload.sections
               };
               lastSavedSections = JSON.stringify(sections);
-              localStorage.setItem(
+              safeSetItem(
                 'savedExperiences',
                 JSON.stringify(savedExperiences)
               );
@@ -1725,7 +1733,7 @@
                 name: currentExperienceName,
                 sections: payload.sections
               };
-              localStorage.setItem(
+              safeSetItem(
                 'savedExperiences',
                 JSON.stringify(savedExperiences)
               );
@@ -1789,7 +1797,7 @@
               sections: payload.sections
             };
             savedExperiences.push(newExperience);
-            localStorage.setItem(
+            safeSetItem(
               'savedExperiences',
               JSON.stringify(savedExperiences)
             );
@@ -1814,7 +1822,7 @@
         } else {
           savedExperiences.push(data);
         }
-        localStorage.setItem(
+        safeSetItem(
           "savedExperiences",
           JSON.stringify(savedExperiences)
         );
@@ -1843,7 +1851,7 @@
       }
       editingExperienceId = data.id;
       lastSavedSections = JSON.stringify(sections);
-      localStorage.setItem("savedExperiences", JSON.stringify(savedExperiences));
+      safeSetItem("savedExperiences", JSON.stringify(savedExperiences));
     }
 
     function hidePopup(popupId) {
@@ -1937,7 +1945,7 @@
       const pass = document.getElementById("admin-password").value;
       if (pass === adminPassword) {
         adminLoggedIn = true;
-        localStorage.setItem("adminLoggedIn", "true");
+        safeSetItem("adminLoggedIn", "true");
         document.getElementById("login-error").style.display = 'none';
         document.getElementById("admin-password").value = '';
         showPage('admin');
