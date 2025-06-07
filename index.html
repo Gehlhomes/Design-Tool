@@ -9,6 +9,8 @@
   <!-- Load fonts from Google Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Bangers&display=swap" rel="stylesheet">
+  <!-- Memberstack for authentication -->
+  <script src="https://static.memberstack.com/scripts/v1/memberstack.js" data-memberstack-app-id="YOUR_MEMBERSTACK_APP_ID" defer></script>
   <style>
     * {
       box-sizing: border-box;
@@ -807,6 +809,7 @@
      * Global Data & Initialization
      ******************************/
     let sections = [];
+    let memberId = null; // Memberstack user ID
     const defaultSectionNames = [
       "Exteriors", 
       "Interiors", 
@@ -860,20 +863,7 @@
     const adminPassword = "admin"; // Simple password; change for production
     let adminLoggedIn = localStorage.getItem("adminLoggedIn") === "true";
 
-    if (!isClientView) {
-      fetch('/experiences')
-        .then(r => (r.ok ? r.json() : []))
-        .then(list => {
-          savedExperiences = list;
-          if (adminLoggedIn) renderAdmin();
-        });
-      fetch('/analytics')
-        .then(r => (r.ok ? r.json() : []))
-        .then(list => {
-          analyticsData = list;
-          if (adminLoggedIn) renderAdmin();
-        });
-    }
+
 
     /*****************************
      * Helper: Read File as Data *
@@ -1407,7 +1397,8 @@
         id: pdfId,
         email: email,
         count: selectedImages.size,
-        pdfBase64: pdfBase64
+        pdfBase64: pdfBase64,
+        userId: memberId
       };
       fetch('/analytics', {
         method: 'POST',
@@ -1447,7 +1438,8 @@
 
       const payload = {
         sections: JSON.parse(JSON.stringify(sections)),
-        name: currentExperienceName || 'Untitled Experience'
+        name: currentExperienceName || 'Untitled Experience',
+        userId: memberId
       };
       const method = editingExperienceId ? 'PUT' : 'POST';
       const url = editingExperienceId
@@ -1596,7 +1588,8 @@
       }
       const payload = {
         name: name,
-        sections: JSON.parse(JSON.stringify(sections))
+        sections: JSON.parse(JSON.stringify(sections)),
+        userId: memberId
       };
       fetch('/experiences', {
         method: 'POST',
@@ -1653,7 +1646,8 @@
         if (index !== -1) {
           const payload = {
             name: currentExperienceName,
-            sections: JSON.parse(JSON.stringify(sections))
+            sections: JSON.parse(JSON.stringify(sections)),
+            userId: memberId
           };
           fetch(`/experiences/${editingExperienceId}`, {
             method: 'PUT',
@@ -1750,13 +1744,14 @@
         document.getElementById("duplicate-name-error").style.display = "block";
         return;
       }
-      if (duplicatingExperienceIndex !== null) {
-        const exp = savedExperiences[duplicatingExperienceIndex];
-        const payload = {
-          name: name,
-          sections: JSON.parse(JSON.stringify(exp.sections))
-        };
-        fetch('/experiences', {
+        if (duplicatingExperienceIndex !== null) {
+          const exp = savedExperiences[duplicatingExperienceIndex];
+          const payload = {
+            name: name,
+            sections: JSON.parse(JSON.stringify(exp.sections)),
+            userId: memberId
+          };
+          fetch('/experiences', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -1952,9 +1947,37 @@
       }
     }
 
-    initialRender();
+    function startApp() {
+      if (!isClientView) {
+        const query = memberId ? `?userId=${encodeURIComponent(memberId)}` : '';
+        fetch('/experiences' + query)
+          .then(r => (r.ok ? r.json() : []))
+          .then(list => {
+            savedExperiences = list;
+            if (adminLoggedIn) renderAdmin();
+          });
+        fetch('/analytics' + query)
+          .then(r => (r.ok ? r.json() : []))
+          .then(list => {
+            analyticsData = list;
+            if (adminLoggedIn) renderAdmin();
+          });
+      }
+      initialRender();
+    }
 
     window.addEventListener('beforeunload', autoSaveCurrentExperience);
+
+    if (window.$memberstackDom) {
+      window.$memberstackDom.getCurrentMember()
+        .then(({ data: member }) => {
+          if (member) memberId = member.id;
+          startApp();
+        })
+        .catch(startApp);
+    } else {
+      startApp();
+    }
   </script>
 </body>
 </html>
