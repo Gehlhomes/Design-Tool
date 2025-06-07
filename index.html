@@ -1404,6 +1404,7 @@
       const linkButtons = document.getElementById("link-buttons");
       spinner.style.display = "block";
       linkButtons.style.display = "none";
+
       fetch('/experiences', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1414,12 +1415,16 @@
       })
         .then(resp => resp.json())
         .then(data => {
-          const experienceId = data.id;
-          const nameSlug = (currentExperienceName || 'Untitled').trim().replace(/\s+/g, '-').toLowerCase();
-          generatedLink = `${window.location.origin}${window.location.pathname}?experienceId=${experienceId}&experience=${encodeURIComponent(nameSlug)}`;
-          autoSaveCurrentExperience();
-          spinner.style.display = 'none';
-          linkButtons.style.display = 'block';
+          return fetch('/server-address')
+            .then(r => r.ok ? r.json() : { address: window.location.hostname, port: window.location.port || 3000 })
+            .then(info => {
+              const base = `${window.location.protocol}//${info.address}:${info.port}${window.location.pathname}`;
+              const nameSlug = (currentExperienceName || 'Untitled').trim().replace(/\s+/g, '-').toLowerCase();
+              generatedLink = `${base}?experienceId=${data.id}&experience=${encodeURIComponent(nameSlug)}`;
+              autoSaveCurrentExperience();
+              spinner.style.display = 'none';
+              linkButtons.style.display = 'block';
+            });
         })
         .catch(err => {
           console.error('Error saving experience:', err);
@@ -1440,7 +1445,19 @@
       if (action === 'copy') {
         copyLink();
       } else if (action === 'preview') {
-        window.open(generatedLink, '_blank');
+        const experienceId = getQueryParam("experienceId") || generatedLink.split("experienceId=")[1]?.split("&")[0];
+        if (experienceId) {
+          fetch(`/experiences/${experienceId}`)
+            .then(resp => resp.ok ? resp.json() : Promise.reject('Not found'))
+            .then(exp => {
+              sections = JSON.parse(JSON.stringify(exp.sections || []));
+              currentExperienceName = exp.name || null;
+              isClientView = true;
+              showPage('client');
+              renderClient();
+            })
+            .catch(() => alert('Error: Experience not found for preview.'));
+        }
       }
     }
 
