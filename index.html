@@ -698,6 +698,16 @@
     <button id="nav-admin" onclick="showPage('admin')">Admin</button>
   </div>
 
+  <!-- Login Page -->
+  <div id="login-page" class="page" style="display: none;">
+    <h1>Admin Login</h1>
+    <div style="text-align: center;">
+      <input type="password" id="admin-password" placeholder="Password">
+      <button onclick="login()">Login</button>
+    </div>
+    <p id="login-error" style="color: red; text-align: center; display: none;">Incorrect password</p>
+  </div>
+
   <!-- Login / Signup Page -->
   <div id="auth-page" class="page" style="display: none;">
     <div class="auth-box">
@@ -854,6 +864,8 @@
     let sections = [];
     let userId = localStorage.getItem("userId");
     let loggedIn = !!userId;
+    const adminPassword = "admin"; // Simple password for admin login
+    let adminLoggedIn = localStorage.getItem("adminLoggedIn") === "true";
     // When viewing a shared experience link without logging in, we'll store the
     // owning user's id so analytics can be associated with the correct account.
     let experienceOwnerId = null;
@@ -1900,6 +1912,17 @@
         return;
       }
 
+      if (page === 'admin' && !adminLoggedIn) {
+        document.getElementById("login-page").style.display = 'block';
+        document.getElementById("business-page").style.display = 'none';
+        document.getElementById("client-page").style.display = 'none';
+        document.getElementById("admin-page").style.display = 'none';
+        currentPage = 'login';
+        return;
+      } else {
+        document.getElementById("login-page").style.display = 'none';
+      }
+
       if (currentPage === 'business' && page !== 'business' && hasUnsavedChanges()) {
         closeAllPopups();
         targetPage = page;
@@ -1939,6 +1962,19 @@
         renderClient();
       } else {
         renderBusiness();
+      }
+    }
+
+    function login() {
+      const pass = document.getElementById("admin-password").value;
+      if (pass === adminPassword) {
+        adminLoggedIn = true;
+        localStorage.setItem("adminLoggedIn", "true");
+        document.getElementById("login-error").style.display = 'none';
+        document.getElementById("admin-password").value = '';
+        showPage('admin');
+      } else {
+        document.getElementById("login-error").style.display = 'block';
       }
     }
 
@@ -1994,7 +2030,9 @@
 
     function logout() {
       loggedIn = false;
+      adminLoggedIn = false;
       localStorage.removeItem('userId');
+      localStorage.removeItem('adminLoggedIn');
       showAuthPage();
     }
     
@@ -2054,6 +2092,7 @@
       document.getElementById('business-page').style.display = 'none';
       document.getElementById('client-page').style.display = 'none';
       document.getElementById('admin-page').style.display = 'none';
+      document.getElementById('login-page').style.display = 'none';
     }
 
     if (userId) {
