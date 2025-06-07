@@ -816,6 +816,60 @@
       return params.get(param);
     }
 
+const SERVER_URL = "http://localhost:3000";
+
+async function saveExperienceToServer(exp) {
+  try {
+    const res = await fetch(`${SERVER_URL}/experiences`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(exp)
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data.id;
+    }
+  } catch (e) {
+    console.error('Error saving experience to server', e);
+  }
+  return null;
+}
+
+async function loadExperienceFromServer(id) {
+  try {
+    const res = await fetch(`${SERVER_URL}/experiences/${id}`);
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (e) {
+    console.error('Error loading experience from server', e);
+  }
+  return null;
+}
+
+async function sendAnalyticsToServer(record) {
+  try {
+    await fetch(`${SERVER_URL}/analytics`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(record)
+    });
+  } catch (e) {
+    console.error('Error sending analytics to server', e);
+  }
+}
+
+async function fetchAnalyticsFromServer() {
+  try {
+    const res = await fetch(`${SERVER_URL}/analytics`);
+    if (res.ok) {
+      analyticsData = await res.json();
+      localStorage.setItem("analyticsData", JSON.stringify(analyticsData));
+    }
+  } catch (e) {
+    console.error('Error fetching analytics from server', e);
+  }
+}
     /**********************
      * IndexedDB Helpers  *
      **********************/
@@ -873,17 +927,23 @@
       const experienceIdParam = getQueryParam("experienceId");
       if (experienceIdParam) {
         try {
-          const data = await dbGet('tempExperiences', experienceIdParam);
+          let data = await dbGet('tempExperiences', experienceIdParam);
+          if (!data) {
+            data = await loadExperienceFromServer(experienceIdParam);
+            if (data) {
+              await dbSet('tempExperiences', { id: experienceIdParam, ...data });
+            }
+          }
           if (data) {
             sections = data.sections;
             currentExperienceName = data.name || null;
             isClientView = true;
           } else {
-            console.error('Experience ID not found in storage.');
+            console.error('Experience ID not found.');
             alert('Error: Experience not found.');
           }
         } catch (e) {
-          console.error('Error loading experience from storage:', e);
+          console.error('Error loading experience:', e);
           alert('Error loading experience data.');
         }
       }
@@ -1449,18 +1509,18 @@
       pdf.save("gehl-homes-brochure.pdf");
 
       // Store in analytics
-      analyticsData.push({
+      const record = {
         id: pdfId,
         email: email,
         count: selectedImages.size,
         pdfBase64: pdfBase64
-      });
+      };
+      analyticsData.push(record);
       localStorage.setItem("analyticsData", JSON.stringify(analyticsData));
+      await sendAnalyticsToServer(record);
+      await fetchAnalyticsFromServer();
       renderAdmin(); // Refresh Admin to show new submission
     }
-
-    function downloadUserPDF(pdfId) {
-      const record = analyticsData.find(rec => rec.id === pdfId);
       if (record && record.pdfBase64) {
         const link = document.createElement('a');
         link.href = record.pdfBase64;
@@ -1483,16 +1543,17 @@
       linkButtons.style.display = "none";
       setTimeout(async () => {
         try {
-          // Generate unique experience ID
-          const experienceId = Date.now().toString();
-          // Store experience in IndexedDB
+          const name = currentExperienceName || 'Untitled Experience';
+          const experienceId = await saveExperienceToServer({
+            sections: JSON.parse(JSON.stringify(sections)),
+            name: name
+          }) || Date.now().toString();
           await dbSet('tempExperiences', {
             id: experienceId,
             sections: JSON.parse(JSON.stringify(sections)),
-            name: currentExperienceName || 'Untitled Experience'
+            name: name
           });
-          // Generate shareable link with experienceId
-          const nameSlug = (currentExperienceName || 'Untitled').trim().replace(/\s+/g, '-').toLowerCase();
+          const nameSlug = name.trim().replace(/\s+/g, "-").toLowerCase();
           generatedLink = `${window.location.origin}${window.location.pathname}?experienceId=${experienceId}&experience=${encodeURIComponent(nameSlug)}`;
           autoSaveCurrentExperience();
           spinner.style.display = "none";
@@ -1881,6 +1942,7 @@
      ***********************/
     async function main() {
       await migrateSavedExperiences();
+      await fetchAnalyticsFromServer();
       await initFromUrl();
       if (isClientView) {
         document.getElementById("navbar").style.display = "none";
