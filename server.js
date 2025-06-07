@@ -120,9 +120,19 @@ async function dbGetExperience(id) {
       .eq('id', id)
       .single();
     if (error) return null;
-    return row;
+    // Normalize the user id field so the client code doesn't need to handle
+    // different property names depending on whether Supabase is used.
+    return {
+      id: row.id,
+      name: row.name,
+      sections: row.sections,
+      userId: row.user_id
+    };
   }
-  return data.experiences[id] ? { id, ...data.experiences[id] } : null;
+  const exp = data.experiences[id];
+  return exp
+    ? { id, name: exp.name, sections: exp.sections, userId: exp.userId }
+    : null;
 }
 
 async function dbUpdateExperience(id, sections, name) {

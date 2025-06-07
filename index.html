@@ -854,6 +854,9 @@
     let sections = [];
     let userId = localStorage.getItem("userId");
     let loggedIn = !!userId;
+    // When viewing a shared experience link without logging in, we'll store the
+    // owning user's id so analytics can be associated with the correct account.
+    let experienceOwnerId = null;
     const defaultSectionNames = [
       "Exteriors", 
       "Interiors", 
@@ -880,6 +883,8 @@
         .then(exp => {
           sections = exp.sections || [];
           currentExperienceName = exp.name || null;
+          // Store the owning user's id so submissions can be attributed
+          experienceOwnerId = exp.userId || exp.user_id || null;
           isClientView = true;
           renderClient();
           showPage('client');
@@ -1440,7 +1445,9 @@
         email: email,
         count: selectedImages.size,
         pdfBase64: pdfBase64,
-        userId: userId
+        // Use the logged in user's id when available; otherwise fall back to the
+        // owner of the experience so the admin can see the submission.
+        userId: userId || experienceOwnerId
       };
       fetch('/analytics', {
         method: 'POST',
