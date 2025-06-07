@@ -94,11 +94,45 @@ const server = http.createServer((req, res) => {
     });
   }
 
+  if (req.method === 'GET' && url.pathname === '/experiences') {
+    const exps = Object.entries(data.experiences).map(([id, exp]) => ({
+      id,
+      ...exp
+    }));
+    return sendJson(res, 200, exps);
+  }
+
   if (req.method === 'GET' && url.pathname.startsWith('/experiences/')) {
     const id = url.pathname.split('/')[2];
     const exp = data.experiences[id];
     if (exp) {
       sendJson(res, 200, exp);
+    } else {
+      sendJson(res, 404, { error: 'Not found' });
+    }
+    return;
+  }
+
+  if (req.method === 'PUT' && url.pathname.startsWith('/experiences/')) {
+    const id = url.pathname.split('/')[2];
+    return parseRequestBody(req, body => {
+      if (data.experiences[id]) {
+        const { sections, name } = body;
+        data.experiences[id] = { sections, name };
+        saveData();
+        sendJson(res, 200, { success: true });
+      } else {
+        sendJson(res, 404, { error: 'Not found' });
+      }
+    });
+  }
+
+  if (req.method === 'DELETE' && url.pathname.startsWith('/experiences/')) {
+    const id = url.pathname.split('/')[2];
+    if (data.experiences[id]) {
+      delete data.experiences[id];
+      saveData();
+      sendJson(res, 200, { success: true });
     } else {
       sendJson(res, 404, { error: 'Not found' });
     }

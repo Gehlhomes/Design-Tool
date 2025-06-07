@@ -855,6 +855,29 @@
     const adminPassword = "admin"; // Simple password; change for production
     let adminLoggedIn = localStorage.getItem("adminLoggedIn") === "true";
 
+    if (!isClientView) {
+      fetch('/experiences')
+        .then(r => (r.ok ? r.json() : []))
+        .then(list => {
+          savedExperiences = list;
+          localStorage.setItem(
+            'savedExperiences',
+            JSON.stringify(savedExperiences)
+          );
+          if (adminLoggedIn) renderAdmin();
+        });
+      fetch('/analytics')
+        .then(r => (r.ok ? r.json() : []))
+        .then(list => {
+          analyticsData = list;
+          localStorage.setItem(
+            'analyticsData',
+            JSON.stringify(analyticsData)
+          );
+          if (adminLoggedIn) renderAdmin();
+        });
+    }
+
     /*****************************
      * Helper: Read File as Data *
      *****************************/
@@ -1178,13 +1201,22 @@
           deleteButton.textContent = "Delete Experience";
           deleteButton.onclick = function() {
             experienceToDelete = expIndex;
-            document.getElementById("delete-experience-popup").style.display = "flex";
-            document.getElementById("confirm-delete").onclick = function() {
-              savedExperiences.splice(experienceToDelete, 1);
-              localStorage.setItem("savedExperiences", JSON.stringify(savedExperiences));
-              experienceToDelete = null;
-              hidePopup('delete-experience-popup');
-              renderAdmin();
+            document.getElementById('delete-experience-popup').style.display = 'flex';
+            document.getElementById('confirm-delete').onclick = function() {
+              const expId = savedExperiences[experienceToDelete].id;
+              fetch(`/experiences/${expId}`, { method: 'DELETE' })
+                .then(resp => {
+                  if (!resp.ok) throw new Error();
+                  savedExperiences.splice(experienceToDelete, 1);
+                  localStorage.setItem(
+                    'savedExperiences',
+                    JSON.stringify(savedExperiences)
+                  );
+                  experienceToDelete = null;
+                  hidePopup('delete-experience-popup');
+                  renderAdmin();
+                })
+                .catch(() => alert('Failed to delete experience.'));
             };
           };
           expDiv.appendChild(deleteButton);
@@ -1371,15 +1403,27 @@
       const pdfId = Date.now().toString(); // Unique ID for submission
       pdf.save("gehl-homes-brochure.pdf");
 
-      // Store in analytics
-      analyticsData.push({
+      const record = {
         id: pdfId,
         email: email,
         count: selectedImages.size,
         pdfBase64: pdfBase64
-      });
-      localStorage.setItem("analyticsData", JSON.stringify(analyticsData));
-      renderAdmin(); // Refresh Admin to show new submission
+      };
+      fetch('/analytics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(record)
+      })
+        .then(resp => {
+          if (!resp.ok) throw new Error();
+          analyticsData.push(record);
+          localStorage.setItem(
+            'analyticsData',
+            JSON.stringify(analyticsData)
+          );
+          renderAdmin();
+        })
+        .catch(() => alert('Failed to store analytics.'));
     }
 
     function downloadUserPDF(pdfId) {
@@ -1405,22 +1449,50 @@
       spinner.style.display = "block";
       linkButtons.style.display = "none";
 
-      fetch('/experiences', {
-        method: 'POST',
+      const payload = {
+        sections: JSON.parse(JSON.stringify(sections)),
+        name: currentExperienceName || 'Untitled Experience'
+      };
+      const method = editingExperienceId ? 'PUT' : 'POST';
+      const url = editingExperienceId
+        ? `/experiences/${editingExperienceId}`
+        : '/experiences';
+      fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sections: JSON.parse(JSON.stringify(sections)),
-          name: currentExperienceName || 'Untitled Experience'
-        })
+        body: JSON.stringify(payload)
       })
-        .then(resp => resp.json())
+        .then(resp => resp.ok ? resp.json() : Promise.reject())
         .then(data => {
+          if (!editingExperienceId) {
+            editingExperienceId = data.id;
+            savedExperiences.push({
+              id: data.id,
+              name: payload.name,
+              sections: payload.sections
+            });
+          } else {
+            const idx = savedExperiences.findIndex(
+              e => e.id === editingExperienceId
+            );
+            if (idx !== -1) {
+              savedExperiences[idx] = {
+                id: editingExperienceId,
+                name: payload.name,
+                sections: payload.sections
+              };
+            }
+          }
+          localStorage.setItem(
+            'savedExperiences',
+            JSON.stringify(savedExperiences)
+          );
           const base = window.location.origin + window.location.pathname;
           const nameSlug = (currentExperienceName || 'Untitled')
             .trim()
             .replace(/\s+/g, '-')
             .toLowerCase();
-          generatedLink = `${base}?experienceId=${data.id}&experience=${encodeURIComponent(
+          generatedLink = `${base}?experienceId=${editingExperienceId}&experience=${encodeURIComponent(
             nameSlug
           )}`;
           ensureExperienceSavedLocally();
@@ -1530,25 +1602,40 @@
         document.getElementById("name-error").style.display = "block";
         return;
       }
-      const newExperience = {
-        id: savedExperiences.length,
+      const payload = {
         name: name,
         sections: JSON.parse(JSON.stringify(sections))
       };
-      savedExperiences.push(newExperience);
-      localStorage.setItem("savedExperiences", JSON.stringify(savedExperiences));
-      currentExperienceName = name;
-      editingExperienceId = newExperience.id;
-      lastSavedSections = JSON.stringify(sections);
-      hidePopup("save-name-popup");
-      closeAllPopups();
-      // If navigating from save-changes-popup, go to target page
-      if (targetPage) {
-        resetToNewExperience();
-        showPage(targetPage);
-      }
-      renderBusiness();
-      renderAdmin();
+      fetch('/experiences', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+        .then(resp => resp.ok ? resp.json() : Promise.reject())
+        .then(data => {
+          const newExperience = {
+            id: data.id,
+            name: name,
+            sections: payload.sections
+          };
+          savedExperiences.push(newExperience);
+          localStorage.setItem(
+            'savedExperiences',
+            JSON.stringify(savedExperiences)
+          );
+          currentExperienceName = name;
+          editingExperienceId = newExperience.id;
+          lastSavedSections = JSON.stringify(sections);
+          hidePopup('save-name-popup');
+          closeAllPopups();
+          if (targetPage) {
+            resetToNewExperience();
+            showPage(targetPage);
+          }
+          renderBusiness();
+          renderAdmin();
+        })
+        .catch(() => alert('Failed to save experience.'));
     }
 
     function discardAndReset() {
@@ -1572,20 +1659,37 @@
      ****************************/
     function saveExperience() {
       if (currentExperienceName && editingExperienceId !== null) {
-        // Update existing named experience
-        const index = savedExperiences.findIndex(exp => exp.id === editingExperienceId);
+        const index = savedExperiences.findIndex(
+          exp => exp.id === editingExperienceId
+        );
         if (index !== -1) {
-          savedExperiences[index] = {
-            id: editingExperienceId,
+          const payload = {
             name: currentExperienceName,
             sections: JSON.parse(JSON.stringify(sections))
           };
-          lastSavedSections = JSON.stringify(sections);
-          localStorage.setItem("savedExperiences", JSON.stringify(savedExperiences));
-          hidePopup("save-name-popup");
-          closeAllPopups();
-          renderAdmin();
-          renderBusiness();
+          fetch(`/experiences/${editingExperienceId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          })
+            .then(resp => {
+              if (!resp.ok) throw new Error();
+              savedExperiences[index] = {
+                id: editingExperienceId,
+                name: currentExperienceName,
+                sections: payload.sections
+              };
+              lastSavedSections = JSON.stringify(sections);
+              localStorage.setItem(
+                'savedExperiences',
+                JSON.stringify(savedExperiences)
+              );
+              hidePopup('save-name-popup');
+              closeAllPopups();
+              renderAdmin();
+              renderBusiness();
+            })
+            .catch(() => alert('Failed to save experience.'));
         }
       } else {
         // Prompt for name if unnamed
@@ -1601,21 +1705,38 @@
      ****************************/
     function saveChangesAndNavigate() {
       if (currentExperienceName && editingExperienceId !== null) {
-        // Save to existing named experience
-        const index = savedExperiences.findIndex(exp => exp.id === editingExperienceId);
+        const index = savedExperiences.findIndex(
+          exp => exp.id === editingExperienceId
+        );
         if (index !== -1) {
-          savedExperiences[index] = {
-            id: editingExperienceId,
+          const payload = {
             name: currentExperienceName,
             sections: JSON.parse(JSON.stringify(sections))
           };
-          localStorage.setItem("savedExperiences", JSON.stringify(savedExperiences));
-          lastSavedSections = JSON.stringify(sections);
-          hidePopup("save-changes-popup");
-          closeAllPopups();
-          resetToNewExperience();
-          showPage(targetPage);
-          renderAdmin();
+          fetch(`/experiences/${editingExperienceId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          })
+            .then(resp => {
+              if (!resp.ok) throw new Error();
+              savedExperiences[index] = {
+                id: editingExperienceId,
+                name: currentExperienceName,
+                sections: payload.sections
+              };
+              localStorage.setItem(
+                'savedExperiences',
+                JSON.stringify(savedExperiences)
+              );
+              lastSavedSections = JSON.stringify(sections);
+              hidePopup('save-changes-popup');
+              closeAllPopups();
+              resetToNewExperience();
+              showPage(targetPage);
+              renderAdmin();
+            })
+            .catch(() => alert('Failed to save experience.'));
         }
       } else {
         // Prompt for name for new experience
@@ -1651,16 +1772,32 @@
       }
       if (duplicatingExperienceIndex !== null) {
         const exp = savedExperiences[duplicatingExperienceIndex];
-        const newExperience = {
-          id: savedExperiences.length,
+        const payload = {
           name: name,
           sections: JSON.parse(JSON.stringify(exp.sections))
         };
-        savedExperiences.push(newExperience);
-        localStorage.setItem("savedExperiences", JSON.stringify(savedExperiences));
-        duplicatingExperienceIndex = null;
-        hidePopup("duplicate-experience-popup");
-        renderAdmin();
+        fetch('/experiences', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        })
+          .then(resp => resp.ok ? resp.json() : Promise.reject())
+          .then(data => {
+            const newExperience = {
+              id: data.id,
+              name: name,
+              sections: payload.sections
+            };
+            savedExperiences.push(newExperience);
+            localStorage.setItem(
+              'savedExperiences',
+              JSON.stringify(savedExperiences)
+            );
+            duplicatingExperienceIndex = null;
+            hidePopup('duplicate-experience-popup');
+            renderAdmin();
+          })
+          .catch(() => alert('Failed to duplicate experience.'));
       }
     }
 
@@ -1677,7 +1814,15 @@
         } else {
           savedExperiences.push(data);
         }
-        localStorage.setItem("savedExperiences", JSON.stringify(savedExperiences));
+        localStorage.setItem(
+          "savedExperiences",
+          JSON.stringify(savedExperiences)
+        );
+        fetch(`/experiences/${editingExperienceId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: data.name, sections: data.sections })
+        }).catch(() => {});
       }
     }
 
