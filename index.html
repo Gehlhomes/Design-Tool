@@ -820,20 +820,22 @@
     let currentExperienceName = null;
     const experienceIdParam = getQueryParam("experienceId");
     if (experienceIdParam) {
-      try {
-        const storedExperiences = JSON.parse(localStorage.getItem("tempExperiences") || "{}");
-        if (storedExperiences[experienceIdParam]) {
-          sections = storedExperiences[experienceIdParam].sections;
-          currentExperienceName = storedExperiences[experienceIdParam].name || null;
+      fetch(`/experiences/${experienceIdParam}`)
+        .then(resp => {
+          if (!resp.ok) throw new Error('Not found');
+          return resp.json();
+        })
+        .then(exp => {
+          sections = exp.sections || [];
+          currentExperienceName = exp.name || null;
           isClientView = true;
-        } else {
-          console.error("Experience ID not found in storage.");
-          alert("Error: Experience not found.");
-        }
-      } catch (e) {
-        console.error("Error loading experience from storage:", e);
-        alert("Error loading experience data.");
-      }
+          renderClient();
+          showPage('client');
+        })
+        .catch(err => {
+          console.error('Error loading experience from server:', err);
+          alert('Error: Experience not found.');
+        });
     }
 
     // Set to keep track of selected images on the client page.
@@ -1402,23 +1404,28 @@
       const linkButtons = document.getElementById("link-buttons");
       spinner.style.display = "block";
       linkButtons.style.display = "none";
-      setTimeout(() => {
-        // Generate unique experience ID
-        const experienceId = Date.now().toString();
-        // Store experience in localStorage with name
-        let storedExperiences = JSON.parse(localStorage.getItem("tempExperiences") || "{}");
-        storedExperiences[experienceId] = {
+      fetch('/experiences', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           sections: JSON.parse(JSON.stringify(sections)),
-          name: currentExperienceName || "Untitled Experience"
-        };
-        localStorage.setItem("tempExperiences", JSON.stringify(storedExperiences));
-        // Generate shareable link with experienceId
-        const nameSlug = (currentExperienceName || 'Untitled').trim().replace(/\s+/g, '-').toLowerCase();
-        generatedLink = `${window.location.origin}${window.location.pathname}?experienceId=${experienceId}&experience=${encodeURIComponent(nameSlug)}`;
-        autoSaveCurrentExperience();
-        spinner.style.display = "none";
-        linkButtons.style.display = "block";
-      }, 1000); // Simulate 1-second processing
+          name: currentExperienceName || 'Untitled Experience'
+        })
+      })
+        .then(resp => resp.json())
+        .then(data => {
+          const experienceId = data.id;
+          const nameSlug = (currentExperienceName || 'Untitled').trim().replace(/\s+/g, '-').toLowerCase();
+          generatedLink = `${window.location.origin}${window.location.pathname}?experienceId=${experienceId}&experience=${encodeURIComponent(nameSlug)}`;
+          autoSaveCurrentExperience();
+          spinner.style.display = 'none';
+          linkButtons.style.display = 'block';
+        })
+        .catch(err => {
+          console.error('Error saving experience:', err);
+          spinner.style.display = 'none';
+          alert('Failed to generate link.');
+        });
     }
 
     function showLinkPopup(action) {
@@ -1433,20 +1440,7 @@
       if (action === 'copy') {
         copyLink();
       } else if (action === 'preview') {
-        // Simulate client view for preview
-        const experienceId = getQueryParam("experienceId") || generatedLink.split("experienceId=")[1]?.split("&")[0];
-        if (experienceId) {
-          const storedExperiences = JSON.parse(localStorage.getItem("tempExperiences") || "{}");
-          if (storedExperiences[experienceId]) {
-            sections = JSON.parse(JSON.stringify(storedExperiences[experienceId].sections));
-            currentExperienceName = storedExperiences[experienceId].name;
-            isClientView = true;
-            showPage("client");
-            renderClient();
-          } else {
-            alert("Error: Experience not found for preview.");
-          }
-        }
+        window.open(generatedLink, '_blank');
       }
     }
 
@@ -1786,16 +1780,20 @@
     /***********************
      * Initial Render      *
      ***********************/
-    if (isClientView) {
-      document.getElementById("navbar").style.display = "none";
-      document.getElementById("business-page").style.display = "none";
-      document.getElementById("admin-page").style.display = "none";
-      document.getElementById("client-page").style.display = "block";
-      renderClient();
-    } else {
-      renderBusiness();
-      showPage('business'); // Start on Experience Builder
+    function initialRender() {
+      if (isClientView) {
+        document.getElementById("navbar").style.display = "none";
+        document.getElementById("business-page").style.display = "none";
+        document.getElementById("admin-page").style.display = "none";
+        document.getElementById("client-page").style.display = "block";
+        renderClient();
+      } else {
+        renderBusiness();
+        showPage('business'); // Start on Experience Builder
+      }
     }
+
+    initialRender();
 
     window.addEventListener('beforeunload', autoSaveCurrentExperience);
   </script>
