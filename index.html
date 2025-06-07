@@ -1417,11 +1417,12 @@
         .then(data => {
           return fetch('/server-address')
             .then(r => r.ok ? r.json() : { address: window.location.hostname, port: window.location.port || 3000 })
+            .catch(() => ({ address: window.location.hostname, port: window.location.port || 3000 }))
             .then(info => {
               const base = `${window.location.protocol}//${info.address}:${info.port}${window.location.pathname}`;
               const nameSlug = (currentExperienceName || 'Untitled').trim().replace(/\s+/g, '-').toLowerCase();
               generatedLink = `${base}?experienceId=${data.id}&experience=${encodeURIComponent(nameSlug)}`;
-              autoSaveCurrentExperience();
+              ensureExperienceSavedLocally();
               spinner.style.display = 'none';
               linkButtons.style.display = 'block';
             });
@@ -1678,6 +1679,26 @@
         }
         localStorage.setItem("savedExperiences", JSON.stringify(savedExperiences));
       }
+    }
+
+    function ensureExperienceSavedLocally() {
+      if (!currentExperienceName) {
+        currentExperienceName = 'Untitled Experience';
+      }
+      const data = {
+        id: editingExperienceId !== null ? editingExperienceId : savedExperiences.length,
+        name: currentExperienceName,
+        sections: JSON.parse(JSON.stringify(sections))
+      };
+      const index = savedExperiences.findIndex(exp => exp.id === data.id);
+      if (index !== -1) {
+        savedExperiences[index] = data;
+      } else {
+        savedExperiences.push(data);
+      }
+      editingExperienceId = data.id;
+      lastSavedSections = JSON.stringify(sections);
+      localStorage.setItem("savedExperiences", JSON.stringify(savedExperiences));
     }
 
     function hidePopup(popupId) {
