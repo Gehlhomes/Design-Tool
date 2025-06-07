@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { URL } = require('url');
 const os = require('os');
+const crypto = require('crypto');
 try { require('dotenv').config(); } catch {}
 let createClient = null;
 try { ({ createClient } = require('@supabase/supabase-js')); } catch {}
@@ -17,7 +18,7 @@ const supabase = supabaseUrl && supabaseKey && createClient
 // store it on a persistent volume. Defaults to "data.json" in the
 // application directory.
 const DATA_FILE = process.env.DATA_FILE || 'data.json';
-let data = { experiences: {}, analytics: [] };
+let data = { experiences: {}, analytics: [], users: {} };
 if (!supabase && fs.existsSync(DATA_FILE)) {
   try {
     data = JSON.parse(fs.readFileSync(DATA_FILE));
@@ -25,6 +26,21 @@ if (!supabase && fs.existsSync(DATA_FILE)) {
     console.error('Failed to parse data file:', e);
   }
 }
+
+function hashPassword(pass) {
+  return crypto.createHash('sha256').update(pass).digest('hex');
+}
+
+function ensureDefaultUser() {
+  const existing = Object.values(data.users || {}).find(u => u.username === 'gehlhomes');
+  if (!existing) {
+    const id = Date.now().toString();
+    data.users[id] = { username: 'gehlhomes', passwordHash: hashPassword('GEadmin') };
+    saveData();
+  }
+}
+
+ensureDefaultUser();
 
 function saveData() {
   if (!supabase) {
@@ -193,6 +209,31 @@ const server = http.createServer(async (req, res) => {
       }
     });
     return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/signup') {
+    return parseRequestBody(req, body => {
+      const { username, password } = body;
+      if (!username || !password) return sendJson(res, 400, { error: 'missing' });
+      const exists = Object.entries(data.users).find(([id, u]) => u.username === username);
+      if (exists) return sendJson(res, 409, { error: 'exists' });
+      const id = Date.now().toString();
+      data.users[id] = { username, passwordHash: hashPassword(password) };
+      saveData();
+      sendJson(res, 200, { userId: id });
+    });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/login') {
+    return parseRequestBody(req, body => {
+      const { username, password } = body;
+      const entry = Object.entries(data.users).find(([id, u]) => u.username === username);
+      if (entry && entry[1].passwordHash === hashPassword(password)) {
+        sendJson(res, 200, { userId: entry[0] });
+      } else {
+        sendJson(res, 401, { error: 'invalid' });
+      }
+    });
   }
 
   if (req.method === 'POST' && url.pathname === '/experiences') {
