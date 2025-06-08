@@ -1887,6 +1887,7 @@
      ***********************/
     function showPage(page) {
       if (isClientView) {
+        document.getElementById("auth-page").style.display = "none";
         document.getElementById("navbar").style.display = "none";
         document.getElementById("business-page").style.display = "none";
         document.getElementById("admin-page").style.display = "none";
@@ -2058,7 +2059,9 @@
       document.getElementById('admin-page').style.display = 'none';
     }
 
-    if (userId) {
+    if (isClientView) {
+      startApp();
+    } else if (userId) {
       startApp();
     } else {
       showAuthPage();
