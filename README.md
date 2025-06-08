@@ -7,10 +7,11 @@ This repository contains a simple Node server and single-page application for bu
 - `SUPABASE_URL` – URL of your Supabase project
 - `SUPABASE_KEY` – service role or anon key
 - `DATA_FILE` – optional path to JSON file used when Supabase is not configured.
-  By default the server stores data in `~/design-tool/data.json` so your
-  experiences survive code updates. If you set `DATA_FILE`, make sure it points
-  outside the application directory; otherwise the file will be removed on
-  deploy and your data will be lost.
+  By default the server stores data in `~/design-tool/data.json`. When running
+  on platforms such as Render you should use a persistent volume or external
+  database and set `DATA_FILE` to that path (for example `/var/data/data.json`).
+  If the file lives inside the application directory it will be removed whenever
+  the service restarts and all experiences and submissions will be lost.
 
 Create these variables when deploying on Render or another platform.
 
