@@ -2087,20 +2087,65 @@
         renderAdmin();
 
         const query = userId ? `?userId=${encodeURIComponent(userId)}` : '';
-        fetch('/experiences' + query)
-          .then(r => (r.ok ? r.json() : []))
-          .then(list => {
-            savedExperiences = list;
-            saveExperiencesToLocal();
-            renderAdmin();
-          });
-        fetch('/analytics' + query)
-          .then(r => (r.ok ? r.json() : []))
-          .then(list => {
-            analyticsData = list;
-            saveAnalyticsToLocal();
-            renderAdmin();
-          });
+
+        (async () => {
+          const expResp = await fetch('/experiences' + query);
+          let serverExps = expResp.ok ? await expResp.json() : [];
+          const serverIds = new Set(serverExps.map(e => String(e.id)));
+          const missing = savedExperiences.filter(e => !serverIds.has(String(e.id)));
+          if (missing.length > 0) {
+            const created = [];
+            for (const exp of missing) {
+              try {
+                const resp = await fetch('/experiences', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ userId, name: exp.name, sections: exp.sections })
+                });
+                if (resp.ok) {
+                  const data = await resp.json();
+                  created.push({ id: data.id, name: exp.name, sections: exp.sections });
+                } else {
+                  created.push(exp);
+                }
+              } catch {
+                created.push(exp);
+              }
+            }
+            serverExps = serverExps.concat(created);
+          }
+          savedExperiences = serverExps;
+          saveExperiencesToLocal();
+          renderAdmin();
+        })();
+
+        (async () => {
+          const anaResp = await fetch('/analytics' + query);
+          let serverAnalytics = anaResp.ok ? await anaResp.json() : [];
+          const serverIds = new Set(serverAnalytics.map(a => String(a.id)));
+          const missing = analyticsData.filter(a => !serverIds.has(String(a.id)));
+          if (missing.length > 0) {
+            for (const rec of missing) {
+              try {
+                await fetch('/analytics', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    id: rec.id,
+                    email: rec.email,
+                    count: rec.count,
+                    pdfBase64: rec.pdfBase64,
+                    userId
+                  })
+                });
+              } catch {}
+            }
+            serverAnalytics = serverAnalytics.concat(missing);
+          }
+          analyticsData = serverAnalytics;
+          saveAnalyticsToLocal();
+          renderAdmin();
+        })();
       }
       initialRender();
     }
