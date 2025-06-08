@@ -1310,7 +1310,7 @@
           </tr>
         `;
         analyticsData.forEach(record => {
-          const pdfCell = record.pdfBase64
+          const pdfCell = record.hasPdf || record.pdfBase64
             ? `<button class="saved-experience-btn" onclick="downloadUserPDF('${record.id}')">Download PDF</button>`
             : "No PDF available";
           table.innerHTML += `
@@ -1454,48 +1454,62 @@
         }
       }
 
-      // Save PDF as Base64 for storage
-      const pdfBase64 = pdf.output('datauristring');
-      const pdfId = Date.now().toString(); // Unique ID for submission
+      const pdfBlob = pdf.output('blob');
+      const pdfId = Date.now().toString();
 
       const record = {
         id: pdfId,
         email: email,
         count: selectedImages.size,
-        pdfBase64: pdfBase64,
-        // Use the logged in user's id when available; otherwise fall back to the
-        // owner of the experience so the admin can see the submission.
         userId: userId || experienceOwnerId
       };
-      try {
-        const resp = await fetch('/analytics', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(record)
-        });
-        if (!resp.ok) throw new Error();
-        analyticsData.push(record);
-        saveAnalyticsToLocal();
-        renderAdmin();
-      } catch {
-        alert('Failed to store analytics.');
-      }
 
-      pdf.save("gehl-homes-brochure.pdf");
+      const reader = new FileReader();
+      reader.onloadend = async function() {
+        record.pdfBase64 = reader.result;
+        try {
+          const resp = await fetch('/analytics', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(record)
+          });
+          if (!resp.ok) throw new Error();
+          analyticsData.push({ id: record.id, email: record.email, count: record.count, hasPdf: true });
+          saveAnalyticsToLocal();
+          renderAdmin();
+        } catch {
+          alert('Failed to store analytics.');
+        }
+      };
+      reader.readAsDataURL(pdfBlob);
+
+      const url = URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'gehl-homes-brochure.pdf';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
     }
 
     function downloadUserPDF(pdfId) {
-      const record = analyticsData.find(rec => rec.id === pdfId);
-      if (record && record.pdfBase64) {
-        const link = document.createElement('a');
-        link.href = record.pdfBase64;
-        link.download = `client-brochure-${pdfId}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      } else {
-        alert("PDF not available for download.");
-      }
+      fetch(`/analytics/${pdfId}/pdf`)
+        .then(resp => {
+          if (!resp.ok) throw new Error();
+          return resp.blob();
+        })
+        .then(blob => {
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `client-brochure-${pdfId}.pdf`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        })
+        .catch(() => alert('PDF not available for download.'));
     }
 
     function deleteSubmission(id) {
