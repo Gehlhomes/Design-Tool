@@ -19,7 +19,19 @@ const supabase = supabaseUrl && supabaseKey && createClient
 // default location inside the user's home directory so the file isn't
 // replaced when the application code is updated.
 const DEFAULT_DATA_FILE = path.join(os.homedir(), 'design-tool', 'data.json');
-const DATA_FILE = process.env.DATA_FILE || DEFAULT_DATA_FILE;
+let DATA_FILE = process.env.DATA_FILE
+  ? path.resolve(process.env.DATA_FILE)
+  : DEFAULT_DATA_FILE;
+// Using a data path inside the app directory means the file will be lost on
+// deployments that replace the code. Detect this and fall back to the
+// persistent default path so experiences survive code updates.
+if (DATA_FILE.startsWith(path.resolve(__dirname))) {
+  console.warn(
+    `DATA_FILE ${DATA_FILE} is inside the application directory; ` +
+      `falling back to ${DEFAULT_DATA_FILE} to preserve data across deployments.`
+  );
+  DATA_FILE = DEFAULT_DATA_FILE;
+}
 let data = { experiences: {}, analytics: [], users: {} };
 if (!supabase) {
   try {
