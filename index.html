@@ -939,6 +939,18 @@
         console.warn('localStorage quota exceeded for', key, e);
       }
     }
+
+    function saveExperiencesToLocal() {
+      if (userId) {
+        safeSetItem('experiences_' + userId, JSON.stringify(savedExperiences));
+      }
+    }
+
+    function saveAnalyticsToLocal() {
+      if (userId) {
+        safeSetItem('analytics_' + userId, JSON.stringify(analyticsData));
+      }
+    }
     
     /************************
      * Helper: Compare Sections
@@ -1254,6 +1266,7 @@
                   if (!resp.ok) throw new Error();
                   savedExperiences.splice(experienceToDelete, 1);
                   experienceToDelete = null;
+                  saveExperiencesToLocal();
                   hidePopup('delete-experience-popup');
                   renderAdmin();
                 })
@@ -1293,16 +1306,18 @@
           <tr>
             <th>Email</th>
             <th>User's PDF</th>
+            <th>Delete</th>
           </tr>
         `;
         analyticsData.forEach(record => {
-          const pdfCell = record.pdfBase64 
+          const pdfCell = record.pdfBase64
             ? `<button class="saved-experience-btn" onclick="downloadUserPDF('${record.id}')">Download PDF</button>`
             : "No PDF available";
           table.innerHTML += `
             <tr>
               <td>${record.email || "Anonymous"}</td>
               <td>${pdfCell}</td>
+              <td><button class="saved-experience-btn" onclick="deleteSubmission('${record.id}')">Delete</button></td>
             </tr>
           `;
         });
@@ -1460,6 +1475,7 @@
         });
         if (!resp.ok) throw new Error();
         analyticsData.push(record);
+        saveAnalyticsToLocal();
         renderAdmin();
       } catch {
         alert('Failed to store analytics.');
@@ -1480,6 +1496,21 @@
       } else {
         alert("PDF not available for download.");
       }
+    }
+
+    function deleteSubmission(id) {
+      if (!confirm('Delete this submission?')) return;
+      fetch(`/analytics/${id}`, { method: 'DELETE' })
+        .then(resp => {
+          if (!resp.ok) throw new Error();
+          const idx = analyticsData.findIndex(a => a.id === id);
+          if (idx !== -1) {
+            analyticsData.splice(idx, 1);
+            saveAnalyticsToLocal();
+            renderAdmin();
+          }
+        })
+        .catch(() => alert('Failed to delete submission.'));
     }
     
     /***********************
@@ -1514,6 +1545,7 @@
               name: payload.name,
               sections: payload.sections
             });
+            saveExperiencesToLocal();
           } else {
             const idx = savedExperiences.findIndex(
               e => e.id === editingExperienceId
@@ -1524,6 +1556,7 @@
                 name: payload.name,
                 sections: payload.sections
               };
+              saveExperiencesToLocal();
             }
           }
           // local caching removed to avoid storage limits
@@ -1659,6 +1692,7 @@
             sections: payload.sections
           };
           savedExperiences.push(newExperience);
+          saveExperiencesToLocal();
           currentExperienceName = name;
           editingExperienceId = newExperience.id;
           lastSavedSections = JSON.stringify(sections);
@@ -1716,6 +1750,7 @@
                 name: currentExperienceName,
                 sections: payload.sections
               };
+              saveExperiencesToLocal();
               lastSavedSections = JSON.stringify(sections);
               hidePopup('save-name-popup');
               closeAllPopups();
@@ -1758,6 +1793,7 @@
                 name: currentExperienceName,
                 sections: payload.sections
               };
+              saveExperiencesToLocal();
               lastSavedSections = JSON.stringify(sections);
               hidePopup('save-changes-popup');
               closeAllPopups();
@@ -1819,6 +1855,7 @@
               sections: payload.sections
             };
             savedExperiences.push(newExperience);
+            saveExperiencesToLocal();
             duplicatingExperienceIndex = null;
             hidePopup('duplicate-experience-popup');
             renderAdmin();
@@ -1845,6 +1882,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: data.name, sections: data.sections })
         }).catch(() => {});
+        saveExperiencesToLocal();
       }
     }
 
@@ -1865,6 +1903,7 @@
       }
       editingExperienceId = data.id;
       lastSavedSections = JSON.stringify(sections);
+      saveExperiencesToLocal();
     }
 
     function hidePopup(popupId) {
@@ -2039,17 +2078,29 @@
 
     function startApp() {
       if (!isClientView) {
+        const expKey = 'experiences_' + userId;
+        const anaKey = 'analytics_' + userId;
+        try {
+          savedExperiences = JSON.parse(localStorage.getItem(expKey) || '[]');
+        } catch {}
+        try {
+          analyticsData = JSON.parse(localStorage.getItem(anaKey) || '[]');
+        } catch {}
+        renderAdmin();
+
         const query = userId ? `?userId=${encodeURIComponent(userId)}` : '';
         fetch('/experiences' + query)
           .then(r => (r.ok ? r.json() : []))
           .then(list => {
             savedExperiences = list;
+            saveExperiencesToLocal();
             renderAdmin();
           });
         fetch('/analytics' + query)
           .then(r => (r.ok ? r.json() : []))
           .then(list => {
             analyticsData = list;
+            saveAnalyticsToLocal();
             renderAdmin();
           });
       }

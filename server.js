@@ -217,6 +217,21 @@ async function dbListAnalytics(userId) {
     .map(a => ({ ...a, userId: a.userId ?? a.user_id }));
 }
 
+async function dbDeleteAnalytics(id) {
+  if (supabase) {
+    const { error } = await supabase.from('analytics').delete().eq('id', id);
+    if (error) throw error;
+    return true;
+  }
+  const idx = data.analytics.findIndex(a => a.id === id);
+  if (idx !== -1) {
+    data.analytics.splice(idx, 1);
+    saveData();
+    return true;
+  }
+  return false;
+}
+
 const server = http.createServer(async (req, res) => {
   // CORS preflight
   if (req.method === 'OPTIONS') {
@@ -380,6 +395,22 @@ const server = http.createServer(async (req, res) => {
       console.error(e);
       return sendJson(res, 500, { error: 'server' });
     }
+  }
+
+  if (req.method === 'DELETE' && url.pathname.startsWith('/analytics/')) {
+    const id = url.pathname.split('/')[2];
+    try {
+      const deleted = await dbDeleteAnalytics(id);
+      if (deleted) {
+        sendJson(res, 200, { success: true });
+      } else {
+        sendJson(res, 404, { error: 'Not found' });
+      }
+    } catch (e) {
+      console.error(e);
+      sendJson(res, 500, { error: 'server' });
+    }
+    return;
   }
 
   sendJson(res, 404, { error: 'Not found' });
