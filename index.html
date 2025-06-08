@@ -1466,18 +1466,12 @@
       };
 
       try {
-        const json = JSON.stringify(record);
-        if (navigator.sendBeacon) {
-          const blob = new Blob([json], { type: 'application/json' });
-          navigator.sendBeacon('/analytics', blob);
-        } else {
-          const resp = await fetch('/analytics', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: json
-          });
-          if (!resp.ok) throw new Error();
-        }
+        const resp = await fetch('/analytics', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(record)
+        });
+        if (!resp.ok) throw new Error();
         analyticsData.push(record);
         saveAnalyticsToLocal();
         renderAdmin();
