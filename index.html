@@ -1468,29 +1468,35 @@
       reader.onloadend = async function() {
         record.pdfBase64 = reader.result;
         try {
-          const resp = await fetch('/analytics', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(record)
-          });
-          if (!resp.ok) throw new Error();
+          const json = JSON.stringify(record);
+          if (navigator.sendBeacon) {
+            const blob = new Blob([json], { type: 'application/json' });
+            navigator.sendBeacon('/analytics', blob);
+          } else {
+            const resp = await fetch('/analytics', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: json
+            });
+            if (!resp.ok) throw new Error();
+          }
           analyticsData.push({ id: record.id, email: record.email, count: record.count, hasPdf: true });
           saveAnalyticsToLocal();
           renderAdmin();
         } catch {
           alert('Failed to store analytics.');
+        } finally {
+          const url = URL.createObjectURL(pdfBlob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = 'gehl-homes-brochure.pdf';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
         }
       };
       reader.readAsDataURL(pdfBlob);
-
-      const url = URL.createObjectURL(pdfBlob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = 'gehl-homes-brochure.pdf';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
     }
 
     function downloadUserPDF(pdfId) {
