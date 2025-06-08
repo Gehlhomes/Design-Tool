@@ -856,8 +856,8 @@
      * Global Data & Initialization
      ******************************/
     let sections = [];
-    let userId = null;
-    let loggedIn = false;
+    let userId = localStorage.getItem('userId');
+    let loggedIn = !!userId;
     // When viewing a shared experience link without logging in, we'll store the
     // owning user's id so analytics can be associated with the correct account.
     let experienceOwnerId = null;
@@ -1962,6 +1962,7 @@
           if (res.userId) {
             userId = res.userId;
             loggedIn = true;
+            localStorage.setItem('userId', userId);
             document.getElementById('auth-error').style.display = 'none';
             document.getElementById('auth-page').style.display = 'none';
             document.getElementById('navbar').style.display = 'block';
@@ -1986,6 +1987,7 @@
           if (res.userId) {
             userId = res.userId;
             loggedIn = true;
+            localStorage.setItem('userId', userId);
             document.getElementById('auth-error').style.display = 'none';
             document.getElementById('auth-page').style.display = 'none';
             document.getElementById('navbar').style.display = 'block';
@@ -2000,6 +2002,7 @@
     function logout() {
       loggedIn = false;
       userId = null;
+      localStorage.removeItem('userId');
       showAuthPage();
     }
     

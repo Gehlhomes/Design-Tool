@@ -21,3 +21,9 @@ npm start
 ```
 
 The server listens on `PORT` (defaults to 3000).
+
+## Persistent Login
+
+The front-end stores the logged-in user's ID in `localStorage` so you remain
+authenticated when you refresh the page. Click **Logout** to clear the saved
+ID.
