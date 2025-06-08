@@ -207,9 +207,14 @@ async function dbListAnalytics(userId) {
       .select()
       .eq('user_id', userId);
     if (error) throw error;
-    return rows;
+    // Normalize user id field so the front-end doesn't need to handle
+    // different property names.
+    return rows.map(r => ({ ...r, userId: r.user_id }));
   }
-  return data.analytics.filter(a => a.userId === userId);
+  // Support old records that may still use snake_case.
+  return data.analytics
+    .filter(a => (a.userId ?? a.user_id) === userId)
+    .map(a => ({ ...a, userId: a.userId ?? a.user_id }));
 }
 
 const server = http.createServer(async (req, res) => {
@@ -343,13 +348,19 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'POST' && url.pathname === '/analytics') {
     return parseRequestBody(req, async body => {
-      const record = {
-        id: Date.now().toString(),
+      // Store analytics using camelCase when writing to the local JSON
+      // file, but keep snake_case when sending to Supabase to match the
+      // database column name. This ensures the analytics list works
+      // consistently in both modes.
+      const baseRecord = {
+        id: body.id || Date.now().toString(),
         email: body.email,
         count: body.count,
-        pdfBase64: body.pdfBase64,
-        user_id: body.userId
+        pdfBase64: body.pdfBase64
       };
+      const record = supabase
+        ? { ...baseRecord, user_id: body.userId }
+        : { ...baseRecord, userId: body.userId };
       try {
         await dbInsertAnalytics(record);
         sendJson(res, 200, { success: true });
