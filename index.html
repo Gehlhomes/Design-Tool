@@ -1310,7 +1310,7 @@
           </tr>
         `;
         analyticsData.forEach(record => {
-          const pdfCell = record.hasPdf || record.pdfBase64
+          const pdfCell = record.pdfBase64
             ? `<button class="saved-experience-btn" onclick="downloadUserPDF('${record.id}')">Download PDF</button>`
             : "No PDF available";
           table.innerHTML += `
@@ -1454,68 +1454,52 @@
         }
       }
 
-      const pdfBlob = pdf.output('blob');
+      const pdfBase64 = pdf.output('datauristring');
       const pdfId = Date.now().toString();
 
       const record = {
         id: pdfId,
         email: email,
         count: selectedImages.size,
+        pdfBase64: pdfBase64,
         userId: userId || experienceOwnerId
       };
 
-      const reader = new FileReader();
-      reader.onloadend = async function() {
-        record.pdfBase64 = reader.result;
-        try {
-          const json = JSON.stringify(record);
-          if (navigator.sendBeacon) {
-            const blob = new Blob([json], { type: 'application/json' });
-            navigator.sendBeacon('/analytics', blob);
-          } else {
-            const resp = await fetch('/analytics', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: json
-            });
-            if (!resp.ok) throw new Error();
-          }
-          analyticsData.push({ id: record.id, email: record.email, count: record.count, hasPdf: true });
-          saveAnalyticsToLocal();
-          renderAdmin();
-        } catch {
-          alert('Failed to store analytics.');
-        } finally {
-          const url = URL.createObjectURL(pdfBlob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = 'gehl-homes-brochure.pdf';
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          URL.revokeObjectURL(url);
+      try {
+        const json = JSON.stringify(record);
+        if (navigator.sendBeacon) {
+          const blob = new Blob([json], { type: 'application/json' });
+          navigator.sendBeacon('/analytics', blob);
+        } else {
+          const resp = await fetch('/analytics', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: json
+          });
+          if (!resp.ok) throw new Error();
         }
-      };
-      reader.readAsDataURL(pdfBlob);
+        analyticsData.push(record);
+        saveAnalyticsToLocal();
+        renderAdmin();
+      } catch {
+        alert('Failed to store analytics.');
+      }
+
+      pdf.save('gehl-homes-brochure.pdf');
     }
 
     function downloadUserPDF(pdfId) {
-      fetch(`/analytics/${pdfId}/pdf`)
-        .then(resp => {
-          if (!resp.ok) throw new Error();
-          return resp.blob();
-        })
-        .then(blob => {
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = `client-brochure-${pdfId}.pdf`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          URL.revokeObjectURL(url);
-        })
-        .catch(() => alert('PDF not available for download.'));
+      const record = analyticsData.find(rec => rec.id === pdfId);
+      if (record && record.pdfBase64) {
+        const link = document.createElement('a');
+        link.href = record.pdfBase64;
+        link.download = `client-brochure-${pdfId}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } else {
+        alert("PDF not available for download.");
+      }
     }
 
     function deleteSubmission(id) {

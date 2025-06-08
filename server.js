@@ -195,21 +195,7 @@ async function dbInsertAnalytics(record) {
     if (error) throw error;
     return true;
   }
-  const { pdfBase64, ...rest } = record;
-  let pdfPath = null;
-  if (pdfBase64) {
-    try {
-      const base64 = pdfBase64.split(',')[1];
-      const buffer = Buffer.from(base64, 'base64');
-      const dir = path.join(os.homedir(), 'design-tool', 'pdfs');
-      fs.mkdirSync(dir, { recursive: true });
-      pdfPath = path.join(dir, `${record.id}.pdf`);
-      fs.writeFileSync(pdfPath, buffer);
-    } catch (e) {
-      console.error('Failed to store PDF:', e);
-    }
-  }
-  data.analytics.push({ ...rest, pdfPath });
+  data.analytics.push(record);
   saveData();
   return true;
 }
@@ -227,13 +213,7 @@ async function dbListAnalytics(userId) {
   }
   return data.analytics
     .filter(a => (a.userId ?? a.user_id) === userId)
-    .map(a => ({
-      id: a.id,
-      email: a.email,
-      count: a.count,
-      userId: a.userId ?? a.user_id,
-      hasPdf: !!a.pdfPath
-    }));
+    .map(a => ({ ...a, userId: a.userId ?? a.user_id }));
 }
 
 async function dbDeleteAnalytics(id) {
@@ -244,33 +224,11 @@ async function dbDeleteAnalytics(id) {
   }
   const idx = data.analytics.findIndex(a => a.id === id);
   if (idx !== -1) {
-    const rec = data.analytics[idx];
-    if (rec.pdfPath) {
-      try { fs.unlinkSync(rec.pdfPath); } catch {}
-    }
     data.analytics.splice(idx, 1);
     saveData();
     return true;
   }
   return false;
-}
-
-async function dbGetAnalyticsPdf(id) {
-  if (supabase) {
-    const { data: row, error } = await supabase
-      .from('analytics')
-      .select('pdfBase64')
-      .eq('id', id)
-      .single();
-    if (error || !row || !row.pdfBase64) return null;
-    const base64 = row.pdfBase64.split(',')[1];
-    return Buffer.from(base64, 'base64');
-  }
-  const rec = data.analytics.find(a => a.id === id);
-  if (rec && rec.pdfPath && fs.existsSync(rec.pdfPath)) {
-    return fs.readFileSync(rec.pdfPath);
-  }
-  return null;
 }
 
 const server = http.createServer(async (req, res) => {
@@ -438,24 +396,6 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  if (req.method === 'GET' && url.pathname.startsWith('/analytics/') && url.pathname.endsWith('/pdf')) {
-    const id = url.pathname.split('/')[2];
-    try {
-      const pdfBuffer = await dbGetAnalyticsPdf(id);
-      if (!pdfBuffer) {
-        res.writeHead(404, { 'Content-Type': 'text/plain' });
-        res.end('Not found');
-        return;
-      }
-      res.writeHead(200, { 'Content-Type': 'application/pdf' });
-      res.end(pdfBuffer);
-    } catch (e) {
-      console.error(e);
-      res.writeHead(500, { 'Content-Type': 'text/plain' });
-      res.end('Server error');
-    }
-    return;
-  }
 
   if (req.method === 'DELETE' && url.pathname.startsWith('/analytics/')) {
     const id = url.pathname.split('/')[2];
