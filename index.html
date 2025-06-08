@@ -1442,7 +1442,6 @@
       // Save PDF as Base64 for storage
       const pdfBase64 = pdf.output('datauristring');
       const pdfId = Date.now().toString(); // Unique ID for submission
-      pdf.save("gehl-homes-brochure.pdf");
 
       const record = {
         id: pdfId,
@@ -1453,17 +1452,20 @@
         // owner of the experience so the admin can see the submission.
         userId: userId || experienceOwnerId
       };
-      fetch('/analytics', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(record)
-      })
-        .then(resp => {
-          if (!resp.ok) throw new Error();
-          analyticsData.push(record);
-          renderAdmin();
-        })
-        .catch(() => alert('Failed to store analytics.'));
+      try {
+        const resp = await fetch('/analytics', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(record)
+        });
+        if (!resp.ok) throw new Error();
+        analyticsData.push(record);
+        renderAdmin();
+      } catch {
+        alert('Failed to store analytics.');
+      }
+
+      pdf.save("gehl-homes-brochure.pdf");
     }
 
     function downloadUserPDF(pdfId) {
