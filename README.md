@@ -47,6 +47,8 @@ Using Supabase is recommended for reliability and scalability.
 
 ## Running
 
+Run the server with:
+
 ```
 npm start
 ```
