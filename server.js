@@ -126,6 +126,7 @@ function saveData() {
   });
 }
 
+// Create the default admin account once the save logic is ready.
 ensureDefaultUser();
 
 function getLocalAddress() {
