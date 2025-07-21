@@ -4,6 +4,7 @@ const path = require('path');
 const { URL } = require('url');
 const os = require('os');
 const crypto = require('crypto');
+const multer = require('multer');
 try { require('dotenv').config(); } catch {}
 let createClient = null;
 try { ({ createClient } = require('@supabase/supabase-js')); } catch {}
@@ -13,6 +14,19 @@ const supabaseKey = process.env.SUPABASE_KEY;
 const supabase = supabaseUrl && supabaseKey && createClient
   ? createClient(supabaseUrl, supabaseKey)
   : null;
+
+// Image storage setup
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = path.join(__dirname, 'uploads/images');
+    fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + '-' + file.originalname);
+  }
+});
+const upload = multer({ storage });
 
 // Allow specifying a custom path for the data file so deployments can
 // store it on a persistent volume. If DATA_FILE is not provided, use a
@@ -34,6 +48,10 @@ if (DATA_FILE.startsWith(path.resolve(__dirname))) {
 }
 let data = { experiences: {}, analytics: [], users: {} };
 if (!supabase) {
+  console.log('Using local data file at ' + DATA_FILE);
+  console.warn(
+    'Warning: No Supabase configured. Using local file storage. Ensure persistent volume is set up on Render to avoid data loss.'
+  );
   try {
     fs.mkdirSync(path.dirname(DATA_FILE), { recursive: true });
   } catch (e) {
@@ -48,6 +66,8 @@ if (!supabase) {
   } else {
     fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
   }
+} else {
+  console.log('Using Supabase for storage.');
 }
 
 function hashPassword(pass) {
@@ -87,7 +107,7 @@ function sendJson(res, status, obj) {
   res.writeHead(status, {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+    'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type'
   });
   res.end(JSON.stringify(obj));
@@ -231,12 +251,23 @@ async function dbDeleteAnalytics(id) {
   return false;
 }
 
+async function uploadImageToSupabase(file) {
+  const { data, error } = await supabase.storage
+    .from('images')
+    .upload(`public/${Date.now()}-${file.originalname}`, file.buffer, {
+      contentType: file.mimetype
+    });
+  if (error) throw error;
+  const { publicUrl } = supabase.storage.from('images').getPublicUrl(data.path);
+  return publicUrl;
+}
+
 const server = http.createServer(async (req, res) => {
   // CORS preflight
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+      'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type'
     });
     res.end();
@@ -258,6 +289,45 @@ const server = http.createServer(async (req, res) => {
       } else {
         res.writeHead(200, { 'Content-Type': 'text/html' });
         res.end(content);
+      }
+    });
+    return;
+  }
+
+  // Serve uploaded images if local storage
+  if (!supabase && req.method === 'GET' && url.pathname.startsWith('/uploads/images/')) {
+    const filePath = path.join(__dirname, url.pathname);
+    if (fs.existsSync(filePath)) {
+      const stat = fs.statSync(filePath);
+      res.writeHead(200, {
+        'Content-Type': 'image/jpeg',
+        'Content-Length': stat.size
+      });
+      fs.createReadStream(filePath).pipe(res);
+    } else {
+      res.writeHead(404);
+      res.end('Not found');
+    }
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/upload-image') {
+    upload.single('image')(req, res, async (err) => {
+      if (err) {
+        console.error(err);
+        return sendJson(res, 500, { error: 'Upload failed' });
+      }
+      try {
+        let imageUrl;
+        if (supabase) {
+          imageUrl = await uploadImageToSupabase(req.file);
+        } else {
+          imageUrl = `/uploads/images/${req.file.filename}`;
+        }
+        sendJson(res, 200, { url: imageUrl });
+      } catch (e) {
+        console.error(e);
+        sendJson(res, 500, { error: 'Upload failed' });
       }
     });
     return;
