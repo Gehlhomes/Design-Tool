@@ -15,7 +15,8 @@ const supabase = supabaseUrl && supabaseKey && createClient
   ? createClient(supabaseUrl, supabaseKey)
   : null;
 
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const stripeSecret = process.env.STRIPE_SECRET_KEY;
+const stripe = stripeSecret ? require('stripe')(stripeSecret) : null;
 
 // Image storage setup
 const storage = multer.diskStorage({
@@ -520,6 +521,10 @@ const server = http.createServer(async (req, res) => {
         res.writeHead(400, { 'Content-Type': 'text/plain' });
         return res.end('Missing userId');
       }
+      if (!stripe) {
+        res.writeHead(501, { 'Content-Type': 'text/plain' });
+        return res.end('Stripe not configured');
+      }
       try {
         const session = await stripe.checkout.sessions.create({
           mode: 'subscription',
@@ -540,6 +545,10 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'POST' && url.pathname === '/webhook') {
+    if (!stripe) {
+      res.writeHead(501, { 'Content-Type': 'text/plain' });
+      return res.end('Stripe not configured');
+    }
     let event;
     try {
       event = stripe.webhooks.constructEvent(

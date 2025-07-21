@@ -12,6 +12,9 @@ This repository contains a simple Node server and single-page application for bu
   database and set `DATA_FILE` to that path (for example `/var/data/data.json`).
   If the file lives inside the application directory it will be removed whenever
   the service restarts and all experiences and submissions will be lost.
+- `STRIPE_SECRET_KEY` – optional, your Stripe secret key for paid subscriptions
+- `STRIPE_PRICE_ID` – optional, the Stripe price ID used for checkout
+  (if these are omitted, subscription and payment features are disabled)
 
 Create these variables when deploying on Render or another platform.
 
