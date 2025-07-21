@@ -49,6 +49,19 @@ if (DATA_FILE.startsWith(path.resolve(__dirname))) {
   );
   DATA_FILE = DEFAULT_DATA_FILE;
 }
+// If a legacy data.json exists in the application directory but the
+// persistent file does not yet, migrate the old data to the new location so
+// saved experiences survive code updates.
+const LEGACY_DATA_FILE = path.join(__dirname, 'data.json');
+if (!fs.existsSync(DATA_FILE) && fs.existsSync(LEGACY_DATA_FILE)) {
+  try {
+    fs.mkdirSync(path.dirname(DATA_FILE), { recursive: true });
+    fs.copyFileSync(LEGACY_DATA_FILE, DATA_FILE);
+    console.log(`Migrated data file from ${LEGACY_DATA_FILE} to ${DATA_FILE}`);
+  } catch (e) {
+    console.error('Failed to migrate legacy data file:', e);
+  }
+}
 let data = { experiences: {}, analytics: [], users: {} };
 if (!supabase) {
   console.log('Using local data file at ' + DATA_FILE);
