@@ -4,7 +4,12 @@ const path = require('path');
 const { URL } = require('url');
 const os = require('os');
 const crypto = require('crypto');
-const multer = require('multer');
+let multer = null;
+try {
+  multer = require('multer');
+} catch (e) {
+  console.warn('multer not installed; image uploads disabled');
+}
 try { require('dotenv').config(); } catch {}
 let createClient = null;
 try { ({ createClient } = require('@supabase/supabase-js')); } catch {}
@@ -23,17 +28,20 @@ const homeHtml = fs.readFileSync(path.join(__dirname, 'home.html'));
 const appHtml = fs.readFileSync(path.join(__dirname, 'app.html'));
 
 // Image storage setup
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const dir = path.join(__dirname, 'uploads/images');
-    fs.mkdirSync(dir, { recursive: true });
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + '-' + file.originalname);
-  }
-});
-const upload = multer({ storage });
+let upload = null;
+if (multer) {
+  const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+      const dir = path.join(__dirname, 'uploads/images');
+      fs.mkdirSync(dir, { recursive: true });
+      cb(null, dir);
+    },
+    filename: (req, file, cb) => {
+      cb(null, Date.now() + '-' + file.originalname);
+    }
+  });
+  upload = multer({ storage });
+}
 
 // Allow specifying a custom path for the data file so deployments can
 // store it on a persistent volume. If DATA_FILE is not provided, use a
@@ -107,10 +115,9 @@ function ensureDefaultUser() {
   }
 }
 
-ensureDefaultUser();
-
 let saving = false;
 let pendingSave = false;
+ensureDefaultUser();
 function saveData() {
   if (supabase) return;
   if (saving) {
@@ -357,6 +364,9 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'POST' && url.pathname === '/upload-image') {
+    if (!upload) {
+      return sendJson(res, 501, { error: 'Uploads disabled' });
+    }
     upload.single('image')(req, res, async (err) => {
       if (err) {
         console.error(err);
