@@ -76,10 +76,16 @@ function hashPassword(pass) {
 }
 
 function ensureDefaultUser() {
-  const existing = Object.values(data.users || {}).find(u => u.username === 'Gehlhomes');
+  const existing = Object.values(data.users || {}).find(
+    u => (u.username || '').toLowerCase() === 'gehlhomes'
+  );
   if (!existing) {
     const id = Date.now().toString();
-    data.users[id] = { username: 'Gehlhomes', passwordHash: hashPassword('GEadmin'), subscription: 'active' };
+    data.users[id] = {
+      username: 'Gehlhomes',
+      passwordHash: hashPassword('GEadmin'),
+      subscription: 'active'
+    };
     saveData();
   }
 }
@@ -354,13 +360,20 @@ const server = http.createServer(async (req, res) => {
         res.writeHead(400, { 'Content-Type': 'text/plain' });
         return res.end('Missing username or password');
       }
-      const exists = Object.entries(data.users).find(([id, u]) => u.username === username);
+      const lower = username.toLowerCase();
+      const exists = Object.entries(data.users).find(
+        ([, u]) => (u.username || '').toLowerCase() === lower
+      );
       if (exists) {
         res.writeHead(409, { 'Content-Type': 'text/plain' });
         return res.end('Username already exists');
       }
       const id = Date.now().toString();
-      data.users[id] = { username, passwordHash: hashPassword(password), subscription: 'none' };
+      data.users[id] = {
+        username,
+        passwordHash: hashPassword(password),
+        subscription: 'none'
+      };
       saveData();
       sendJson(res, 200, { userId: id });
     });
@@ -373,7 +386,10 @@ const server = http.createServer(async (req, res) => {
         res.writeHead(400, { 'Content-Type': 'text/plain' });
         return res.end('Missing username or password');
       }
-      const entry = Object.entries(data.users).find(([id, u]) => u.username === username);
+      const lower = username.toLowerCase();
+      const entry = Object.entries(data.users).find(
+        ([id, u]) => (u.username || '').toLowerCase() === lower
+      );
       if (entry && entry[1].passwordHash === hashPassword(password)) {
         sendJson(res, 200, { userId: entry[0] });
       } else {
