@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Spec Book - Gehl Homes</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&family=Roboto:wght@400&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Roboto', sans-serif; background: #fff; color: #000; line-height: 1.6; }
+        header { background: #000; color: #fff; padding: 60px 20px; text-align: center; }
+        header h1 { font-family: 'Montserrat', sans-serif; font-size: 3em; margin-bottom: 10px; }
+        header p { font-size: 1.5em; margin-bottom: 20px; }
+        .cta-btn { padding: 15px 30px; background: #000; color: #fff; border: 1px solid #fff; border-radius: 5px; font-size: 1.2em; cursor: pointer; transition: all 0.3s; }
+        .cta-btn:hover { background: #fff; color: #000; border: 1px solid #000; }
+        section { padding: 40px 20px; max-width: 1200px; margin: 0 auto; }
+        #features { background: #fff; border-top: 1px solid #000; border-bottom: 1px solid #000; }
+        #features h2, #pricing h2, #auth h2 { font-family: 'Montserrat', sans-serif; text-align: center; margin-bottom: 30px; font-size: 2.5em; }
+        .feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+        .feature { text-align: center; padding: 20px; background: #fff; border: 1px solid #000; border-radius: 10px; transition: all 0.3s; cursor: pointer; position: relative; overflow: hidden; }
+        .feature:hover { transform: scale(1.05); box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+        .feature h3 { font-size: 1.8em; margin-bottom: 10px; }
+        .feature p { transition: opacity 0.3s; }
+        .feature:hover p { opacity: 0; }
+        .feature::after { content: 'Explore More \2192'; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); opacity: 0; transition: opacity 0.3s; font-weight: bold; font-size: 1.2em; color: #000; }
+        .feature:hover::after { opacity: 1; }
+        #pricing { background: #fff; }
+        .price-card { max-width: 400px; margin: 0 auto; background: #fff; padding: 30px; border: 1px solid #000; border-radius: 10px; text-align: center; }
+        .price-card h3 { font-size: 2em; margin-bottom: 10px; }
+        .price { font-size: 3em; margin-bottom: 20px; }
+        .price span { font-size: 0.5em; }
+        ul { list-style: none; margin-bottom: 20px; }
+        ul li { margin-bottom: 10px; font-size: 1.1em; position: relative; padding-left: 20px; }
+        ul li::before { content: '\2713'; position: absolute; left: 0; color: #000; }
+        #auth { background: #fff; border-top: 1px solid #000; }
+        .auth-box { max-width: 400px; margin: 0 auto; text-align: center; }
+        .auth-box input { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #000; border-radius: 5px; background: #fff; color: #000; }
+        .auth-btn { width: 100%; padding: 10px; background: #000; color: #fff; border: none; border-radius: 5px; cursor: pointer; transition: all 0.3s; }
+        .auth-btn:hover { background: #fff; color: #000; border: 1px solid #000; }
+        .divider { margin: 20px 0; font-weight: bold; }
+        .auth-error { color: red; margin-top: 10px; display: none; }
+        footer { background: #000; color: #fff; text-align: center; padding: 20px; font-size: 0.9em; }
+        @media (max-width: 768px) {
+            header h1 { font-size: 2.5em; }
+            header p { font-size: 1.2em; }
+            #features h2, #pricing h2, #auth h2 { font-size: 2em; }
+            .feature-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Interactive Spec Book</h1>
+        <p>Create customizable experiences with photos and text, generate shareable links, and let users build their own brochures.</p>
+        <button class="cta-btn" onclick="document.getElementById('auth').scrollIntoView({behavior: 'smooth'})">Get Started - Sign Up or Log In</button>
+    </header>
+    <section id="features">
+        <h2>Why Choose Interactive Spec Book?</h2>
+        <div class="feature-grid">
+            <div class="feature">
+                <h3>Easy Experience Creation</h3>
+                <p>Admins can build interactive "experiences" by adding sections with images, text, and custom fields like pricing or specs.</p>
+            </div>
+            <div class="feature">
+                <h3>Shareable Links</h3>
+                <p>Generate unique links to embed on your website or send directly to clients for a personalized selection process.</p>
+            </div>
+            <div class="feature">
+                <h3>User Brochure Generation</h3>
+                <p>Clients select their favorite items, and automatically generate a PDF brochure with their choices.</p>
+            </div>
+            <div class="feature">
+                <h3>Admin Analytics</h3>
+                <p>Track client submissions, download brochures, and gain insights into user preferences.</p>
+            </div>
+        </div>
+    </section>
+    <section id="pricing">
+        <h2>Pricing</h2>
+        <div class="price-card">
+            <h3>Pro Plan</h3>
+            <div class="price">$10<span>/month</span></div>
+            <ul>
+                <li>Unlimited Experiences</li>
+                <li>Unlimited Client Submissions</li>
+                <li>Custom Branding</li>
+                <li>Priority Support</li>
+            </ul>
+            <button class="cta-btn" onclick="initiateSubscription()">Subscribe Now</button>
+        </div>
+    </section>
+    <section id="auth">
+        <h2>Login or Signup</h2>
+        <div class="auth-box">
+            <h3>Login</h3>
+            <input id="login-username" type="text" placeholder="Username">
+            <input id="login-password" type="password" placeholder="Password">
+            <button class="auth-btn" onclick="loginUser()">Login</button>
+            <div class="divider">or</div>
+            <h3>Signup</h3>
+            <input id="signup-username" type="text" placeholder="Username">
+            <input id="signup-password" type="password" placeholder="Password">
+            <button class="auth-btn" onclick="signupUser()">Signup</button>
+            <div id="auth-error" class="auth-error"></div>
+        </div>
+    </section>
+    <footer>
+        <p>&copy; 2025 Gehl Homes Interactive Spec Book. All rights reserved.</p>
+    </footer>
+    <script>
+        function initiateSubscription() {
+            const userId = localStorage.getItem('userId');
+            if (userId) {
+                checkSubscription(userId);
+            } else {
+                showError('Please log in or sign up first to subscribe.');
+                document.getElementById('auth').scrollIntoView({behavior: 'smooth'});
+            }
+        }
+
+        async function loginUser() {
+            const username = document.getElementById('login-username').value.trim();
+            const password = document.getElementById('login-password').value;
+            try {
+                const resp = await fetch('/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                if (!resp.ok) {
+                    const errorText = await resp.text();
+                    throw new Error('Login failed: ' + errorText);
+                }
+                const res = await resp.json();
+                if (res.userId) {
+                    localStorage.setItem('userId', res.userId);
+                    await checkSubscription(res.userId);
+                } else {
+                    showError('Invalid credentials');
+                }
+            } catch (err) {
+                showError(err.message);
+            }
+        }
+
+        async function signupUser() {
+            const username = document.getElementById('signup-username').value.trim();
+            const password = document.getElementById('signup-password').value;
+            try {
+                const resp = await fetch('/signup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                if (!resp.ok) {
+                    const errorText = await resp.text();
+                    throw new Error('Signup failed: ' + errorText);
+                }
+                const res = await resp.json();
+                if (res.userId) {
+                    localStorage.setItem('userId', res.userId);
+                    await checkSubscription(res.userId);
+                } else {
+                    showError('Signup failed');
+                }
+            } catch (err) {
+                showError(err.message);
+            }
+        }
+
+        async function checkSubscription(userId) {
+            try {
+                const resp = await fetch(`/subscription?userId=${userId}`);
+                if (!resp.ok) throw new Error('Subscription check failed');
+                const { status } = await resp.json();
+                if (status === 'active') {
+                    window.location.href = '/app';
+                } else {
+                    const checkoutResp = await fetch('/create-checkout-session', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ userId })
+                    });
+                    if (!checkoutResp.ok) {
+                        const errorText = await checkoutResp.text();
+                        throw new Error('Checkout session creation failed: ' + errorText);
+                    }
+                    const { url } = await checkoutResp.json();
+                    window.location.href = url;
+                }
+            } catch (err) {
+                showError('Error checking subscription: ' + err.message);
+            }
+        }
+
+        function showError(msg) {
+            const error = document.getElementById('auth-error');
+            error.textContent = msg;
+            error.style.display = 'block';
+        }
+    </script>
+</body>
+</html>

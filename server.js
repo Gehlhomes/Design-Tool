@@ -1,4 +1,4 @@
-const http = require('http'); 
+const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { URL } = require('url');
@@ -14,6 +14,8 @@ const supabaseKey = process.env.SUPABASE_KEY;
 const supabase = supabaseUrl && supabaseKey && createClient
   ? createClient(supabaseUrl, supabaseKey)
   : null;
+
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 // Image storage setup
 const storage = multer.diskStorage({
@@ -42,16 +44,14 @@ let DATA_FILE = process.env.DATA_FILE
 if (DATA_FILE.startsWith(path.resolve(__dirname))) {
   console.warn(
     `DATA_FILE ${DATA_FILE} is inside the application directory; ` +
-      `falling back to ${DEFAULT_DATA_FILE} to preserve data across deployments.`
+    `falling back to ${DEFAULT_DATA_FILE} to preserve data across deployments.`
   );
   DATA_FILE = DEFAULT_DATA_FILE;
 }
 let data = { experiences: {}, analytics: [], users: {} };
 if (!supabase) {
   console.log('Using local data file at ' + DATA_FILE);
-  console.warn(
-    'Warning: No Supabase configured. Using local file storage. Ensure persistent volume is set up on Render to avoid data loss.'
-  );
+  console.warn('Warning: No Supabase configured. Using local file storage. Ensure persistent volume is set up on Render to avoid data loss.');
   try {
     fs.mkdirSync(path.dirname(DATA_FILE), { recursive: true });
   } catch (e) {
@@ -75,10 +75,10 @@ function hashPassword(pass) {
 }
 
 function ensureDefaultUser() {
-  const existing = Object.values(data.users || {}).find(u => u.username === 'gehlhomes');
+  const existing = Object.values(data.users || {}).find(u => u.username === 'Gehlhomes');
   if (!existing) {
     const id = Date.now().toString();
-    data.users[id] = { username: 'gehlhomes', passwordHash: hashPassword('GEadmin') };
+    data.users[id] = { username: 'Gehlhomes', passwordHash: hashPassword('GEadmin'), subscription: 'active' };
     saveData();
   }
 }
@@ -253,7 +253,7 @@ async function dbDeleteAnalytics(id) {
 
 async function uploadImageToSupabase(file) {
   const { data, error } = await supabase.storage
-    .from('images')
+    .from('images') // Assume a public bucket named 'images'
     .upload(`public/${Date.now()}-${file.originalname}`, file.buffer, {
       contentType: file.mimetype
     });
@@ -281,8 +281,21 @@ const server = http.createServer(async (req, res) => {
     return sendJson(res, 200, { address, port: PORT });
   }
 
-  if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) {
-    fs.readFile(path.join(__dirname, 'index.html'), (err, content) => {
+  if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/home.html')) {
+    fs.readFile(path.join(__dirname, 'home.html'), (err, content) => {
+      if (err) {
+        res.writeHead(500, { 'Content-Type': 'text/plain' });
+        res.end('Server error');
+      } else {
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.end(content);
+      }
+    });
+    return;
+  }
+
+  if (req.method === 'GET' && url.pathname === '/app') {
+    fs.readFile(path.join(__dirname, 'app.html'), (err, content) => {
       if (err) {
         res.writeHead(500, { 'Content-Type': 'text/plain' });
         res.end('Server error');
@@ -300,7 +313,7 @@ const server = http.createServer(async (req, res) => {
     if (fs.existsSync(filePath)) {
       const stat = fs.statSync(filePath);
       res.writeHead(200, {
-        'Content-Type': 'image/jpeg',
+        'Content-Type': 'image/jpeg', // Adjust based on file type if needed
         'Content-Length': stat.size
       });
       fs.createReadStream(filePath).pipe(res);
@@ -336,11 +349,17 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'POST' && url.pathname === '/signup') {
     return parseRequestBody(req, body => {
       const { username, password } = body;
-      if (!username || !password) return sendJson(res, 400, { error: 'missing' });
+      if (!username || !password) {
+        res.writeHead(400, { 'Content-Type': 'text/plain' });
+        return res.end('Missing username or password');
+      }
       const exists = Object.entries(data.users).find(([id, u]) => u.username === username);
-      if (exists) return sendJson(res, 409, { error: 'exists' });
+      if (exists) {
+        res.writeHead(409, { 'Content-Type': 'text/plain' });
+        return res.end('Username already exists');
+      }
       const id = Date.now().toString();
-      data.users[id] = { username, passwordHash: hashPassword(password) };
+      data.users[id] = { username, passwordHash: hashPassword(password), subscription: 'none' };
       saveData();
       sendJson(res, 200, { userId: id });
     });
@@ -349,11 +368,16 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'POST' && url.pathname === '/login') {
     return parseRequestBody(req, body => {
       const { username, password } = body;
+      if (!username || !password) {
+        res.writeHead(400, { 'Content-Type': 'text/plain' });
+        return res.end('Missing username or password');
+      }
       const entry = Object.entries(data.users).find(([id, u]) => u.username === username);
       if (entry && entry[1].passwordHash === hashPassword(password)) {
         sendJson(res, 200, { userId: entry[0] });
       } else {
-        sendJson(res, 401, { error: 'invalid' });
+        res.writeHead(401, { 'Content-Type': 'text/plain' });
+        res.end('Invalid username or password');
       }
     });
   }
@@ -466,7 +490,6 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-
   if (req.method === 'DELETE' && url.pathname.startsWith('/analytics/')) {
     const id = url.pathname.split('/')[2];
     try {
@@ -483,8 +506,66 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === 'GET' && url.pathname === '/subscription') {
+    const userId = url.searchParams.get('userId');
+    const user = data.users[userId];
+    const status = user ? user.subscription || 'none' : 'none';
+    sendJson(res, 200, { status });
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/create-checkout-session') {
+    parseRequestBody(req, async (body) => {
+      if (!body.userId) {
+        res.writeHead(400, { 'Content-Type': 'text/plain' });
+        return res.end('Missing userId');
+      }
+      try {
+        const session = await stripe.checkout.sessions.create({
+          mode: 'subscription',
+          payment_method_types: ['card'],
+          line_items: [{ price: process.env.STRIPE_PRICE_ID, quantity: 1 }],
+          success_url: `${req.headers.origin}/app`,
+          cancel_url: `${req.headers.origin}/`,
+          client_reference_id: body.userId,
+        });
+        sendJson(res, 200, { url: session.url });
+      } catch (e) {
+        console.error(e);
+        res.writeHead(500, { 'Content-Type': 'text/plain' });
+        res.end('Failed to create checkout session: ' + e.message);
+      }
+    });
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/webhook') {
+    let event;
+    try {
+      event = stripe.webhooks.constructEvent(
+        req.rawBody, // Assume you capture raw body
+        req.headers['stripe-signature'],
+        process.env.STRIPE_WEBHOOK_SECRET
+      );
+    } catch (err) {
+      return sendJson(res, 400, { error: 'Webhook Error' });
+    }
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object;
+      const userId = session.client_reference_id;
+      if (data.users[userId]) {
+        data.users[userId].subscription = 'active';
+        saveData();
+      }
+    }
+    sendJson(res, 200, { received: true });
+    return;
+  }
+
   sendJson(res, 404, { error: 'Not found' });
 });
+
+// To handle raw body for webhook, you may need to add a middleware to capture req.rawBody, e.g., using body-parser or custom parser.
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
