@@ -14,7 +14,8 @@ This repository contains a simple Node server and single-page application for bu
   the service restarts and all experiences and submissions will be lost. The
   server automatically migrates a legacy `data.json` from the application
   directory to this persistent location on first startup so existing data isn't
-  lost when you update the code.
+  lost when you update the code. Data is written asynchronously for faster
+  saves, so ensure this path points to persistent storage.
 - `STRIPE_SECRET_KEY` – optional, your Stripe secret key for paid subscriptions
 - `STRIPE_PRICE_ID` – optional, the Stripe price ID used for checkout
   (if these are omitted, subscription and payment features are disabled)
