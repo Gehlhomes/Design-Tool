@@ -11,7 +11,10 @@ This repository contains a simple Node server and single-page application for bu
   on platforms such as Render you should use a persistent volume or external
   database and set `DATA_FILE` to that path (for example `/var/data/data.json`).
   If the file lives inside the application directory it will be removed whenever
-  the service restarts and all experiences and submissions will be lost.
+  the service restarts and all experiences and submissions will be lost. The
+  server automatically migrates a legacy `data.json` from the application
+  directory to this persistent location on first startup so existing data isn't
+  lost when you update the code.
 - `STRIPE_SECRET_KEY` – optional, your Stripe secret key for paid subscriptions
 - `STRIPE_PRICE_ID` – optional, the Stripe price ID used for checkout
   (if these are omitted, subscription and payment features are disabled)
