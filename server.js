@@ -162,6 +162,15 @@ function parseRequestBody(req, callback) {
   });
 }
 
+function parseRawBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on('data', c => chunks.push(c));
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
+
 async function dbInsertExperience(userId, sections, name) {
   if (supabase) {
     const { data: rows, error } = await supabase
@@ -581,25 +590,26 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(501, { 'Content-Type': 'text/plain' });
       return res.end('Stripe not configured');
     }
-    let event;
     try {
-      event = stripe.webhooks.constructEvent(
-        req.rawBody, // Assume you capture raw body
+      const rawBody = await parseRawBody(req);
+      const event = stripe.webhooks.constructEvent(
+        rawBody,
         req.headers['stripe-signature'],
         process.env.STRIPE_WEBHOOK_SECRET
       );
-    } catch (err) {
-      return sendJson(res, 400, { error: 'Webhook Error' });
-    }
-    if (event.type === 'checkout.session.completed') {
-      const session = event.data.object;
-      const userId = session.client_reference_id;
-      if (data.users[userId]) {
-        data.users[userId].subscription = 'active';
-        saveData();
+      if (event.type === 'checkout.session.completed') {
+        const session = event.data.object;
+        const userId = session.client_reference_id;
+        if (data.users[userId]) {
+          data.users[userId].subscription = 'active';
+          saveData();
+        }
       }
+      sendJson(res, 200, { received: true });
+    } catch (err) {
+      console.error(err);
+      sendJson(res, 400, { error: 'Webhook Error' });
     }
-    sendJson(res, 200, { received: true });
     return;
   }
 
