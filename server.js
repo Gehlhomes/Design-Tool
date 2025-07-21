@@ -18,6 +18,10 @@ const supabase = supabaseUrl && supabaseKey && createClient
 const stripeSecret = process.env.STRIPE_SECRET_KEY;
 const stripe = stripeSecret ? require('stripe')(stripeSecret) : null;
 
+// Cache static HTML so requests return faster
+const homeHtml = fs.readFileSync(path.join(__dirname, 'home.html'));
+const appHtml = fs.readFileSync(path.join(__dirname, 'app.html'));
+
 // Image storage setup
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -105,10 +109,23 @@ function ensureDefaultUser() {
 
 ensureDefaultUser();
 
+let saving = false;
+let pendingSave = false;
 function saveData() {
-  if (!supabase) {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+  if (supabase) return;
+  if (saving) {
+    pendingSave = true;
+    return;
   }
+  saving = true;
+  fs.writeFile(DATA_FILE, JSON.stringify(data, null, 2), err => {
+    saving = false;
+    if (err) console.error('Failed to save data:', err);
+    if (pendingSave) {
+      pendingSave = false;
+      saveData();
+    }
+  });
 }
 
 function getLocalAddress() {
@@ -302,28 +319,14 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/home.html')) {
-    fs.readFile(path.join(__dirname, 'home.html'), (err, content) => {
-      if (err) {
-        res.writeHead(500, { 'Content-Type': 'text/plain' });
-        res.end('Server error');
-      } else {
-        res.writeHead(200, { 'Content-Type': 'text/html' });
-        res.end(content);
-      }
-    });
+    res.writeHead(200, { 'Content-Type': 'text/html' });
+    res.end(homeHtml);
     return;
   }
 
   if (req.method === 'GET' && url.pathname === '/app') {
-    fs.readFile(path.join(__dirname, 'app.html'), (err, content) => {
-      if (err) {
-        res.writeHead(500, { 'Content-Type': 'text/plain' });
-        res.end('Server error');
-      } else {
-        res.writeHead(200, { 'Content-Type': 'text/html' });
-        res.end(content);
-      }
-    });
+    res.writeHead(200, { 'Content-Type': 'text/html' });
+    res.end(appHtml);
     return;
   }
 
